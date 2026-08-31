@@ -1,0 +1,22 @@
+# Node
+node_modules/
+npm-debug.log*
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Build
+dist/
+build/
+
+# Misc
+coverage/
+*.local
