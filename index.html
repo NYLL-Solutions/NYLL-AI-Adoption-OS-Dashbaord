@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -7,6 +7,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="translations.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F8FAFC; }
@@ -29,9 +30,46 @@ const COLORS = {
 };
 
 const PIE_COLORS = ["#2563EB","#16A34A","#EA580C","#7C3AED"];
-const DIM_LABELS = ["Financial Efficiency","Execution Speed","Risk & Governance","Human & Adoption Impact"];
+const DIM_LABEL_KEYS = ['dim_fe','dim_es','dim_rg','dim_ha'];
 const DIM_KEYS   = ["fe","es","rg","ha"];
 
+// ══════════════════════════════════════════════════════════════
+// i18n — source de vérité unique (Context React)
+// ══════════════════════════════════════════════════════════════
+const I18nCtx = React.createContext(null);
+const useI18n = () => React.useContext(I18nCtx);
+
+function makeI18n(lang) {
+  const look = (l, k) => (window.I18N_LOOKUP ? window.I18N_LOOKUP(l, k) : undefined);
+
+  const t = (key, vars) => {
+    let k = key;
+    if (vars && typeof vars.count === "number") {
+      let cat = "other";
+      try { cat = new Intl.PluralRules(lang).select(vars.count); } catch (e) {}
+      if (look(lang, `${key}_${cat}`) !== undefined || look("en", `${key}_${cat}`) !== undefined) k = `${key}_${cat}`;
+    }
+    let s = look(lang, k);
+    if (s === undefined) s = look("en", k);
+    if (s === undefined) return window.I18N_DEBUG ? `⟦${k}⟧` : k;
+    if (vars) for (const [n, v] of Object.entries(vars)) s = String(s).replace(new RegExp(`\\{${n}\\}`, "g"), v);
+    return s;
+  };
+
+  // valeurs métier (Notion) : fallback sur la valeur brute si non mappée
+  const tEnum = (ns, value) => {
+    if (value === undefined || value === null || value === "" || value === "—") return "—";
+    const k = `enum.${ns}.${value}`;
+    const s = look(lang, k) !== undefined ? look(lang, k) : look("en", k);
+    return s === undefined ? String(value) : s;
+  };
+
+  return { lang, t, tEnum };
+}
+
+// ══════════════════════════════════════════════════════════════
+// Data layer
+// ══════════════════════════════════════════════════════════════
 async function fetchNotionData(sourceKey) {
   const res = await fetch("/api/data", {
     method: "POST",
@@ -39,7 +77,7 @@ async function fetchNotionData(sourceKey) {
     body: JSON.stringify({ source: sourceKey }),
   });
   const json = await res.json();
-  if (!json.data) throw new Error(json.error || "No data returned");
+  if (!json.data) throw new Error(json.error || "__NO_DATA__");
   return json.data;
 }
 
@@ -62,10 +100,11 @@ function parseRelIds(val) {
 
 function normId(id) { return (id||"").replace(/-/g,""); }
 
+// title vide => rendu via t('untitled') côté UI
 const parseFrictions = raw => raw.map((r,i) => ({
   _id: r._id || `frc-${i}`,
   id: nf(r,"Waste ID","waste_id") || `WST-0${i+1}`,
-  title: nf(r,"Title","title","name") || "Untitled",
+  title: nf(r,"Title","title","name") || "",
   area: nf(r,"Execution Area","execution_area") || "—",
   severity: nf(r,"Severity","severity") || "Medium",
   impact: nf(r,"Impact Hypothesis Type","impact_hypothesis_type") || "—",
@@ -78,7 +117,7 @@ const parseFrictions = raw => raw.map((r,i) => ({
 const parseHabits = raw => raw.map((r,i) => ({
   _id: r._id || `hab-${i}`,
   id: nf(r,"PDCA ID","pdca_id") || `PDC-0${i+1}`,
-  title: nf(r,"Title","title","name") || "Untitled",
+  title: nf(r,"Title","title","name") || "",
   old: nf(r,"Old Habit","old_habit") || "—",
   new: nf(r,"New Habit","new_habit") || "—",
   cycle: nf(r,"Cycle / Iteration","cycle_iteration","cycle") || "—",
@@ -91,7 +130,7 @@ const parseHabits = raw => raw.map((r,i) => ({
 const parseAITasks = raw => raw.map((r,i) => ({
   _id: r._id || `ait-${i}`,
   id: nf(r,"Task ID","task_id") || `AIT-0${i+1}`,
-  title: nf(r,"Task Name","task_name","Title","title") || "Untitled",
+  title: nf(r,"Task Name","task_name","Title","title") || "",
   capability: nf(r,"AI Capability Type","ai_capability_type") || "—",
   freq: nf(r,"Frequency / Recurrence","frequency_recurrence","frequency") || "Ad hoc",
   original: nf(r,"Original Work (As-Is)","original_work") || "—",
@@ -110,7 +149,7 @@ const parseValues = raw => raw.map((r,i) => {
   return {
     _id: r._id || `val-${i}`,
     id: nf(r,"Value ID","value_id") || `VAL-0${i+1}`,
-    title: nf(r,"Title","title","name") || "Untitled",
+    title: nf(r,"Title","title","name") || "",
     area: nf(r,"Execution Area","execution_area") || "—",
     type: nf(r,"Value Type","value_type") || "—",
     estimate: nf(r,"Conservative Estimate","conservative_estimate") || "—",
@@ -120,10 +159,112 @@ const parseValues = raw => raw.map((r,i) => {
   };
 });
 
+// ══════════════════════════════════════════════════════════════
+// Primitives
+// ══════════════════════════════════════════════════════════════
+const Badge = ({text,color,bg,border}) => (
+  <span style={{background:bg||"#F3F4F6",color:color||COLORS.gray,border:`1px solid ${border||"#E5E7EB"}`,borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{text}</span>
+);
+
+const Card = ({children,style}) => <div style={{background:"#fff",border:`1px solid ${COLORS.borderGray}`,borderRadius:10,padding:20,...style}}>{children}</div>;
+
+const SectionHeader = ({emoji,title,subtitle}) => <div style={{marginBottom:20}}>
+  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+    <span style={{fontSize:22}}>{emoji}</span>
+    <h2 style={{margin:0,fontSize:18,fontWeight:700,color:COLORS.dark}}>{title}</h2>
+  </div>
+  {subtitle&&<p style={{margin:"4px 0 0",fontSize:13,color:COLORS.gray}}>{subtitle}</p>}
+</div>;
+
+// ── Badges métier (composants → re-render garanti au changement de langue) ──
+const GRAY = {c:COLORS.gray,bg:COLORS.lightGray,b:COLORS.borderGray};
+
+const SevBadge = ({value}) => {
+  const {tEnum} = useI18n();
+  const m = {
+    High:   {c:COLORS.red,    bg:COLORS.lightRed,    b:COLORS.borderRed},
+    Medium: {c:COLORS.yellow, bg:COLORS.lightYellow, b:COLORS.borderYellow},
+    Low:    {c:COLORS.green,  bg:COLORS.lightGreen,  b:COLORS.borderGreen},
+  }[value] || GRAY;
+  return <Badge text={tEnum('severity',value)} color={m.c} bg={m.bg} border={m.b}/>;
+};
+
+const StatusBadge = ({value}) => {
+  const {tEnum} = useI18n();
+  const m = {
+    Observed:   {c:COLORS.yellow, bg:COLORS.lightYellow, b:COLORS.borderYellow},
+    Addressed:  {c:COLORS.blue,   bg:COLORS.lightBlue,   b:COLORS.borderBlue},
+    Resolved:   {c:COLORS.green,  bg:COLORS.lightGreen,  b:COLORS.borderGreen},
+    Monitoring: {c:COLORS.purple, bg:COLORS.lightPurple, b:COLORS.borderPurple},
+  }[value] || GRAY;
+  return <Badge text={tEnum('status',value)} color={m.c} bg={m.bg} border={m.b}/>;
+};
+
+const ResultBadge = ({value}) => {
+  const {tEnum} = useI18n();
+  const m = {
+    "Observed":     {c:COLORS.green,  bg:COLORS.lightGreen,  b:COLORS.borderGreen,  p:"✓ "},
+    "Partial":      {c:COLORS.orange, bg:COLORS.lightOrange, b:COLORS.borderOrange, p:"~ "},
+    "Not observed": {c:COLORS.red,    bg:COLORS.lightRed,    b:COLORS.borderRed,    p:"✗ "},
+  }[value] || {...GRAY, p:""};
+  return <Badge text={(m.p||"")+tEnum('result',value)} color={m.c} bg={m.bg} border={m.b}/>;
+};
+
+const FreqBadge = ({value}) => {
+  const {tEnum} = useI18n();
+  const m = {
+    Weekly: {c:COLORS.blue,   bg:COLORS.lightBlue,   b:COLORS.borderBlue},
+    Daily:  {c:COLORS.purple, bg:COLORS.lightPurple, b:COLORS.borderPurple},
+  }[value] || GRAY;
+  return <Badge text={tEnum('frequency',value)} color={m.c} bg={m.bg} border={m.b}/>;
+};
+
+const SponsorBadge = ({value}) => {
+  const {tEnum} = useI18n();
+  const m = {
+    "Validated":      {c:COLORS.green,  bg:COLORS.lightGreen,  b:COLORS.borderGreen},
+    "In Review":      {c:COLORS.blue,   bg:COLORS.lightBlue,   b:COLORS.borderBlue},
+    "On Hold":        {c:COLORS.red,    bg:COLORS.lightRed,    b:COLORS.borderRed},
+    "Needs revision": {c:COLORS.orange, bg:COLORS.lightOrange, b:COLORS.borderOrange},
+  }[value] || GRAY;
+  return <Badge text={tEnum('sponsor',value)} color={m.c} bg={m.bg} border={m.b}/>;
+};
+
+const DecisionBadge = ({value}) => {
+  const {tEnum} = useI18n();
+  const m = {
+    Keep:   {c:COLORS.green,  bg:COLORS.lightGreen,  b:COLORS.borderGreen,  p:"✓ "},
+    Adjust: {c:COLORS.orange, bg:COLORS.lightOrange, b:COLORS.borderOrange, p:""},
+  }[value] || {...GRAY, p:""};
+  return <Badge text={(m.p||"")+tEnum('decision',value)} color={m.c} bg={m.bg} border={m.b}/>;
+};
+
+// ── Fonctions NIU : pures, retournent des clés (jamais de texte) ──
+const NIU_BAND = n => n>=7?{labelKey:'niu_maximum',color:"#1D4ED8",bg:"#DBEAFE",border:"#93C5FD"}
+                 : n>=5?{labelKey:'niu_anchored',color:"#15803D",bg:"#DCFCE7",border:"#86EFAC"}
+                 : n>=3?{labelKey:'niu_building',color:"#C2410C",bg:"#FFEDD5",border:"#FDBA74"}
+                 :      {labelKey:'niu_emerging',color:"#A16207",bg:"#FEF9C3",border:"#FDE047"};
+
+const NIU_LABEL = s => s>=8?{labelKey:'niu_label_maximum_signal',color:COLORS.blue}
+                  : s>=6?{labelKey:'niu_label_anchored_value',color:COLORS.green}
+                  : s>=4?{labelKey:'niu_label_building_value',color:COLORS.orange}
+                  :      {labelKey:'niu_label_emerging_value',color:COLORS.yellow};
+
+const NIUBar = ({score}) => {
+  const {color}=NIU_LABEL(score);
+  return <div style={{display:"flex",alignItems:"center",gap:8}}>
+    <div style={{flex:1,height:5,background:"#E5E7EB",borderRadius:3,overflow:"hidden"}}>
+      <div style={{width:`${(score/8)*100}%`,height:"100%",background:color,borderRadius:3}}/>
+    </div>
+    <span style={{fontSize:11,fontWeight:700,color,minWidth:24}}>{score}</span>
+  </div>;
+};
+
 // ── Pie Chart ──
 function PieChart({ data }) {
+  const {t} = useI18n();
   const total = data.reduce((s,d)=>s+d.value,0);
-  if (!total) return <div style={{color:COLORS.light,fontSize:13,textAlign:"center",padding:20}}>No data for chart.</div>;
+  if (!total) return <div style={{color:COLORS.light,fontSize:13,textAlign:"center",padding:20}}>{t('no_chart_data')}</div>;
   const size=160, cx=size/2, cy=size/2, r=64, ir=36;
   let angle=-Math.PI/2;
   const slices = data.map(d => {
@@ -141,7 +282,7 @@ function PieChart({ data }) {
       <svg width={size} height={size} style={{flexShrink:0}}>
         {slices.map((s,i)=><path key={i} d={s.path} fill={s.color} stroke="#fff" strokeWidth={2}/>)}
         <text x={cx} y={cy-6} textAnchor="middle" fontSize={13} fontWeight={700} fill={COLORS.dark}>{total.toFixed(1)}</text>
-        <text x={cx} y={cy+10} textAnchor="middle" fontSize={9} fill={COLORS.light}>NIU Total</text>
+        <text x={cx} y={cy+10} textAnchor="middle" fontSize={9} fill={COLORS.light}>{t('niu_total')}</text>
       </svg>
       <div style={{display:"flex",flexDirection:"column",gap:8,flex:1,minWidth:160}}>
         {slices.map((s,i)=>(
@@ -157,57 +298,14 @@ function PieChart({ data }) {
   );
 }
 
-const Badge = ({text,color,bg,border}) => (
-  <span style={{background:bg||"#F3F4F6",color:color||COLORS.gray,border:`1px solid ${border||"#E5E7EB"}`,borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{text}</span>
-);
-const sevBadge = s => s==="High"?<Badge text="High" color={COLORS.red} bg={COLORS.lightRed} border={COLORS.borderRed}/>:s==="Medium"?<Badge text="Medium" color={COLORS.yellow} bg={COLORS.lightYellow} border={COLORS.borderYellow}/>:<Badge text="Low" color={COLORS.green} bg={COLORS.lightGreen} border={COLORS.borderGreen}/>;
-const stsBadge = s => {const m={Observed:{c:COLORS.yellow,bg:COLORS.lightYellow,b:COLORS.borderYellow},Addressed:{c:COLORS.blue,bg:COLORS.lightBlue,b:COLORS.borderBlue},Resolved:{c:COLORS.green,bg:COLORS.lightGreen,b:COLORS.borderGreen},Monitoring:{c:COLORS.purple,bg:COLORS.lightPurple,b:COLORS.borderPurple}}[s]||{c:COLORS.gray,bg:COLORS.lightGray,b:COLORS.borderGray};return <Badge text={s} color={m.c} bg={m.bg} border={m.b}/>;};
-const resBadge = r => {
-  if (r==="Observed") return <Badge text="✓ Observed" color={COLORS.green} bg={COLORS.lightGreen} border={COLORS.borderGreen}/>;
-  if (r==="Partial") return <Badge text="~ Partial" color={COLORS.orange} bg={COLORS.lightOrange} border={COLORS.borderOrange}/>;
-  if (r==="Not observed") return <Badge text="✗ Not observed" color={COLORS.red} bg={COLORS.lightRed} border={COLORS.borderRed}/>;
-  return <Badge text="Pending" color={COLORS.gray} bg={COLORS.lightGray} border={COLORS.borderGray}/>;
-};
-const frqBadge = f => f==="Weekly"?<Badge text="Weekly" color={COLORS.blue} bg={COLORS.lightBlue} border={COLORS.borderBlue}/>:f==="Daily"?<Badge text="Daily" color={COLORS.purple} bg={COLORS.lightPurple} border={COLORS.borderPurple}/>:<Badge text="Ad hoc" color={COLORS.gray} bg={COLORS.lightGray} border={COLORS.borderGray}/>;
-
-const NIU_BAND = n => n>=7?{label:"Maximum",color:"#1D4ED8",bg:"#DBEAFE",border:"#93C5FD"}:n>=5?{label:"Anchored",color:"#15803D",bg:"#DCFCE7",border:"#86EFAC"}:n>=3?{label:"Building",color:"#C2410C",bg:"#FFEDD5",border:"#FDBA74"}:{label:"Emerging",color:"#A16207",bg:"#FEF9C3",border:"#FDE047"};
-const NIU_LABEL = s => s>=8?{label:"Maximum signal",color:COLORS.blue}:s>=6?{label:"Anchored value",color:COLORS.green}:s>=4?{label:"Building value",color:COLORS.orange}:{label:"Emerging value",color:COLORS.yellow};
-
-const NIUBar = ({score}) => {
-  const {color}=NIU_LABEL(score);
-  return <div style={{display:"flex",alignItems:"center",gap:8}}>
-    <div style={{flex:1,height:5,background:"#E5E7EB",borderRadius:3,overflow:"hidden"}}>
-      <div style={{width:`${(score/8)*100}%`,height:"100%",background:color,borderRadius:3}}/>
-    </div>
-    <span style={{fontSize:11,fontWeight:700,color,minWidth:24}}>{score}</span>
-  </div>;
-};
-
-const Card = ({children,style}) => <div style={{background:"#fff",border:`1px solid ${COLORS.borderGray}`,borderRadius:10,padding:20,...style}}>{children}</div>;
-const SectionHeader = ({emoji,title,subtitle}) => <div style={{marginBottom:20}}>
-  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-    <span style={{fontSize:22}}>{emoji}</span>
-    <h2 style={{margin:0,fontSize:18,fontWeight:700,color:COLORS.dark}}>{title}</h2>
-  </div>
-  {subtitle&&<p style={{margin:"4px 0 0",fontSize:13,color:COLORS.gray}}>{subtitle}</p>}
-</div>;
-
-const sponsorBadge = s => {
-  const m = {
-    "Validated":      {c:COLORS.green,  bg:COLORS.lightGreen,  b:COLORS.borderGreen},
-    "In Review":      {c:COLORS.blue,   bg:COLORS.lightBlue,   b:COLORS.borderBlue},
-    "On Hold":        {c:COLORS.red,    bg:COLORS.lightRed,    b:COLORS.borderRed},
-    "Needs revision": {c:COLORS.orange, bg:COLORS.lightOrange, b:COLORS.borderOrange},
-  }[s] || {c:COLORS.gray, bg:COLORS.lightGray, b:COLORS.borderGray};
-  return <Badge text={s} color={m.c} bg={m.bg} border={m.b}/>;
-};
-
-// ── Heatmap ──
+// ══════════════════════════════════════════════════════════════
+// Value heatmap
+// ══════════════════════════════════════════════════════════════
 const NIU_COLS = [
-  { label:"Emerging", range:"1–2", min:0,  max:2.99 },
-  { label:"Building", range:"3–4", min:3,  max:4.99 },
-  { label:"Anchored", range:"5–6", min:5,  max:6.99 },
-  { label:"Maximum",  range:"7–8", min:7,  max:8    },
+  { labelKey:"niu_emerging", range:"1–2", min:0,  max:2.99 },
+  { labelKey:"niu_building", range:"3–4", min:3,  max:4.99 },
+  { labelKey:"niu_anchored", range:"5–6", min:5,  max:6.99 },
+  { labelKey:"niu_maximum",  range:"7–8", min:7,  max:8    },
 ];
 const CONF_ROWS = ["High","Medium","Low"];
 const COL_STYLE = [
@@ -218,17 +316,18 @@ const COL_STYLE = [
 ];
 
 function ValueCard({ v }) {
+  const {t,tEnum} = useI18n();
   const band = NIU_BAND(v.niu);
   return (
     <div style={{background:"#fff",border:`1.5px solid ${band.border}`,borderRadius:8,padding:"10px 12px",display:"flex",flexDirection:"column",gap:6,boxShadow:"0 1px 3px rgba(0,0,0,0.06)",minWidth:0}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:4}}>
         <span style={{fontSize:10,fontWeight:700,color:COLORS.light,letterSpacing:0.5}}>{v.id}</span>
-        {sponsorBadge(v.sponsor)}
+        <SponsorBadge value={v.sponsor}/>
       </div>
-      <div style={{fontSize:12,fontWeight:700,color:COLORS.dark,lineHeight:1.3}}>{v.title}</div>
+      <div style={{fontSize:12,fontWeight:700,color:COLORS.dark,lineHeight:1.3}}>{v.title||t('untitled')}</div>
       <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-        <Badge text={v.area} color={COLORS.purple} bg={COLORS.lightPurple} border={COLORS.borderPurple}/>
-        {v.type!=="—"&&<Badge text={v.type} color={v.type==="Time"?COLORS.blue:v.type==="Quality"?COLORS.green:COLORS.orange} bg={v.type==="Time"?COLORS.lightBlue:v.type==="Quality"?COLORS.lightGreen:COLORS.lightOrange} border={COLORS.borderGray}/>}
+        <Badge text={tEnum('area',v.area)} color={COLORS.purple} bg={COLORS.lightPurple} border={COLORS.borderPurple}/>
+        {v.type!=="—"&&<Badge text={tEnum('valueType',v.type)} color={v.type==="Time"?COLORS.blue:v.type==="Quality"?COLORS.green:COLORS.orange} bg={v.type==="Time"?COLORS.lightBlue:v.type==="Quality"?COLORS.lightGreen:COLORS.lightOrange} border={COLORS.borderGray}/>}
       </div>
       <div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
@@ -243,13 +342,14 @@ function ValueCard({ v }) {
 }
 
 function ValueHeatmap({ values }) {
+  const {t,tEnum} = useI18n();
   return (
     <div style={{overflowX:"auto"}}>
       <div style={{display:"grid",gridTemplateColumns:"80px repeat(4,1fr)",gap:8,marginBottom:8,paddingLeft:4}}>
         <div/>
         {NIU_COLS.map((col,i)=>(
-          <div key={col.label} style={{textAlign:"center",padding:"6px 8px",borderRadius:6,background:COL_STYLE[i].hdr.bg,border:`1px solid ${COL_STYLE[i].hdr.border}`}}>
-            <div style={{fontSize:12,fontWeight:700,color:COL_STYLE[i].hdr.color}}>{col.label}</div>
+          <div key={col.labelKey} style={{textAlign:"center",padding:"6px 8px",borderRadius:6,background:COL_STYLE[i].hdr.bg,border:`1px solid ${COL_STYLE[i].hdr.border}`}}>
+            <div style={{fontSize:12,fontWeight:700,color:COL_STYLE[i].hdr.color}}>{t(col.labelKey)}</div>
             <div style={{fontSize:10,color:COL_STYLE[i].hdr.color,opacity:0.7}}>NIU {col.range}</div>
           </div>
         ))}
@@ -260,12 +360,14 @@ function ValueHeatmap({ values }) {
         return (
           <div key={conf} style={{display:"grid",gridTemplateColumns:"80px repeat(4,1fr)",gap:8,marginBottom:8,alignItems:"start"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"8px 4px",borderRadius:6,background:conf==="High"?COLORS.lightGreen:conf==="Medium"?COLORS.lightYellow:COLORS.lightRed,border:`1px solid ${conf==="High"?COLORS.borderGreen:conf==="Medium"?COLORS.borderYellow:COLORS.borderRed}`,minHeight:60}}>
-              <span style={{fontSize:11,fontWeight:700,color:conf==="High"?COLORS.green:conf==="Medium"?COLORS.yellow:COLORS.red,writingMode:"vertical-rl",transform:"rotate(180deg)",letterSpacing:0.5}}>{conf} confidence</span>
+              <span style={{fontSize:11,fontWeight:700,color:conf==="High"?COLORS.green:conf==="Medium"?COLORS.yellow:COLORS.red,writingMode:"vertical-rl",transform:"rotate(180deg)",letterSpacing:0.5}}>
+                {t('confidence_level_label',{level:tEnum('confidence',conf)})}
+              </span>
             </div>
             {NIU_COLS.map((col,ci)=>{
               const cards=rowValues.filter(v=>v.niu>=col.min&&v.niu<=col.max);
               return (
-                <div key={col.label} style={{background:cards.length?COL_STYLE[ci].cell:"#F9FAFB",border:`1px dashed ${cards.length?COL_STYLE[ci].hdr.border:COLORS.borderGray}`,borderRadius:8,padding:cards.length?8:0,minHeight:60,display:"flex",flexDirection:"column",gap:8}}>
+                <div key={col.labelKey} style={{background:cards.length?COL_STYLE[ci].cell:"#F9FAFB",border:`1px dashed ${cards.length?COL_STYLE[ci].hdr.border:COLORS.borderGray}`,borderRadius:8,padding:cards.length?8:0,minHeight:60,display:"flex",flexDirection:"column",gap:8}}>
                   {cards.length===0
                     ?<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:60,color:COLORS.borderGray,fontSize:18}}>—</div>
                     :cards.map(v=><ValueCard key={v.id} v={v}/>)
@@ -281,7 +383,7 @@ function ValueHeatmap({ values }) {
         if(!unclassified.length) return null;
         return (
           <div style={{marginTop:12}}>
-            <div style={{fontSize:11,fontWeight:700,color:COLORS.light,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>— Confidence non renseignée</div>
+            <div style={{fontSize:11,fontWeight:700,color:COLORS.light,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>— {t('confidence_unset')}</div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               {unclassified.map(v=><div key={v.id} style={{width:220}}><ValueCard v={v}/></div>)}
             </div>
@@ -293,16 +395,20 @@ function ValueHeatmap({ values }) {
 }
 
 const NAV = [
-  {key:"Pulse",    label:"📊 Program Pulse"},
-  {key:"Frictions",label:"🔥 Frictions"},
-  {key:"Habits",   label:"🔁 Habits"},
-  {key:"AI Tasks", label:"🤖 AI Tasks"},
-  {key:"Value",    label:"💰 Value"},
-  {key:"W2V",      label:"🔗 Waste-to-Value"},
-  {key:"Pipeline", label:"🔮 Pipeline"},
+  {key:"Pulse",    labelKey:"nav_pulse"},
+  {key:"Frictions",labelKey:"nav_frictions"},
+  {key:"Habits",   labelKey:"nav_habits"},
+  {key:"AI Tasks", labelKey:"nav_ai_tasks"},
+  {key:"Value",    labelKey:"nav_value"},
+  {key:"W2V",      labelKey:"nav_w2v"},
+  {key:"Pipeline", labelKey:"nav_pipeline"},
 ];
 
+// ══════════════════════════════════════════════════════════════
+// Dashboard
+// ══════════════════════════════════════════════════════════════
 function Dashboard() {
+  const {t,tEnum,lang,setLang} = useI18n();
   const [active, setActive] = React.useState("Pulse");
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
@@ -318,40 +424,48 @@ function Dashboard() {
         fetchNotionData("values"),
       ]);
       setData({ frictions:parseFrictions(rawF), habits:parseHabits(rawH), aiTasks:parseAITasks(rawA), values:parseValues(rawV) });
-    } catch(e) { setError(e.message||"Unknown error"); }
+    } catch(e) { setError(e.message || "__UNKNOWN__"); }
     finally { setLoading(false); }
   }, []);
 
   React.useEffect(()=>{ loadData(); },[loadData]);
 
-  const navBtn = ({key,label}) => <button key={key} onClick={()=>setActive(key)} style={{padding:"8px 14px",borderRadius:6,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:active===key?COLORS.blue:"transparent",color:active===key?"#fff":COLORS.gray,whiteSpace:"nowrap"}}>{label}</button>;
+  const errorText = error === "__NO_DATA__" ? t('err_no_data')
+                  : error === "__UNKNOWN__" ? t('unknown_error')
+                  : error;
+
+  const navBtn = ({key,labelKey}) => <button key={key} onClick={()=>setActive(key)} style={{padding:"8px 14px",borderRadius:6,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:active===key?COLORS.blue:"transparent",color:active===key?"#fff":COLORS.gray,whiteSpace:"nowrap"}}>{t(labelKey)}</button>;
 
   const Header = () => <div>
     <div style={{background:"#fff",borderBottom:`1px solid ${COLORS.borderGray}`,padding:"16px 28px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
       <div>
-        <div style={{fontSize:11,fontWeight:700,color:COLORS.blue,letterSpacing:1,textTransform:"uppercase",marginBottom:2}}>NYLL · AI Adoption OS</div>
-        <h1 style={{margin:0,fontSize:20,fontWeight:800,color:COLORS.dark}}>Program Dashboard — AI Adoption OS</h1>
+        <div style={{fontSize:11,fontWeight:700,color:COLORS.blue,letterSpacing:1,textTransform:"uppercase",marginBottom:2}}>{t('branding')}</div>
+        <h1 style={{margin:0,fontSize:20,fontWeight:800,color:COLORS.dark}}>{t('page_heading')}</h1>
       </div>
       <div style={{display:"flex",gap:8,alignItems:"center"}}>
-        <Badge text={loading?"⟳ Syncing…":"● Live"} color={loading?COLORS.orange:COLORS.green} bg={loading?COLORS.lightOrange:COLORS.lightGreen} border={loading?COLORS.borderOrange:COLORS.borderGreen}/>
-        <button onClick={loadData} disabled={loading} style={{background:COLORS.lightBlue,color:COLORS.blue,border:`1px solid ${COLORS.borderBlue}`,borderRadius:6,padding:"6px 12px",cursor:loading?"not-allowed":"pointer",fontWeight:600,fontSize:12}}>↺ Refresh</button>
+        <Badge text={loading?`⟳ ${t('syncing')}`:`● ${t('live')}`} color={loading?COLORS.orange:COLORS.green} bg={loading?COLORS.lightOrange:COLORS.lightGreen} border={loading?COLORS.borderOrange:COLORS.borderGreen}/>
+        <button onClick={loadData} disabled={loading} style={{background:COLORS.lightBlue,color:COLORS.blue,border:`1px solid ${COLORS.borderBlue}`,borderRadius:6,padding:"6px 12px",cursor:loading?"not-allowed":"pointer",fontWeight:600,fontSize:12}}>{"↺ " + t('refresh')}</button>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          {['en','fr'].map(l=>(
+            <button key={l} onClick={()=>setLang(l)} style={{padding:"6px 10px",borderRadius:6,border:`1px solid ${lang===l?COLORS.borderBlue:COLORS.borderGray}`,background:lang===l?COLORS.lightBlue:'transparent',cursor:'pointer',fontWeight:lang===l?700:500,fontSize:12,color:lang===l?COLORS.blue:COLORS.gray}}>{l.toUpperCase()}</button>
+          ))}
+        </div>
       </div>
     </div>
     <div style={{background:"#fff",borderBottom:`1px solid ${COLORS.borderGray}`,padding:"6px 24px",display:"flex",gap:4,overflowX:"auto"}}>{NAV.map(navBtn)}</div>
   </div>;
 
-  if (loading&&!data) return <div><Header/><div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:60,gap:16}}><div style={{width:36,height:36,border:`3px solid ${COLORS.borderBlue}`,borderTop:`3px solid ${COLORS.blue}`,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/><div style={{color:COLORS.gray,fontSize:13}}>Fetching live data from Notion…</div></div></div>;
-  if (error&&!data) return <div><Header/><div style={{padding:28}}><Card style={{borderLeft:`4px solid ${COLORS.red}`,background:COLORS.lightRed}}><div style={{color:COLORS.red,fontWeight:600,marginBottom:6}}>Unable to load data</div><div style={{color:COLORS.mid,fontSize:13,marginBottom:12}}>{error}</div><button onClick={loadData} style={{background:COLORS.red,color:"#fff",border:"none",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontWeight:600,fontSize:13}}>Retry</button></Card></div></div>;
+  if (loading&&!data) return <div><Header/><div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:60,gap:16}}><div style={{width:36,height:36,border:`3px solid ${COLORS.borderBlue}`,borderTop:`3px solid ${COLORS.blue}`,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/><div style={{color:COLORS.gray,fontSize:13}}>{t('loading_message')}</div></div></div>;
+  if (error&&!data) return <div><Header/><div style={{padding:28}}><Card style={{borderLeft:`4px solid ${COLORS.red}`,background:COLORS.lightRed}}><div style={{color:COLORS.red,fontWeight:600,marginBottom:6}}>{t('unable_load')}</div><div style={{color:COLORS.mid,fontSize:13,marginBottom:12}}>{errorText}</div><button onClick={loadData} style={{background:COLORS.red,color:"#fff",border:"none",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontWeight:600,fontSize:13}}>{t('retry')}</button></Card></div></div>;
 
   const {frictions,habits,aiTasks,values} = data;
   const habitsActive  = habits.filter(h=>h.decision==="Keep"||h.decision==="Adjust");
   const validated     = values.filter(v=>v.sponsor==="Validated");
   const pending       = values.filter(v=>v.sponsor!=="Validated"&&v.sponsor!=="On Hold");
   const avgNIU        = values.length?(values.reduce((s,v)=>s+v.niu,0)/values.length).toFixed(1):"—";
-  const dimTotalsValidated = DIM_KEYS.map((k,i)=>({label:DIM_LABELS[i],value:validated.reduce((s,v)=>s+(v[k]||0),0),color:PIE_COLORS[i]})).filter(d=>d.value>0);
-  const dimTotalsPending   = DIM_KEYS.map((k,i)=>({label:DIM_LABELS[i],value:pending.reduce((s,v)=>s+(v[k]||0),0),color:PIE_COLORS[i]})).filter(d=>d.value>0);
+  const dimTotalsValidated = DIM_KEYS.map((k,i)=>({label:t(DIM_LABEL_KEYS[i]),value:validated.reduce((s,v)=>s+(v[k]||0),0),color:PIE_COLORS[i]})).filter(d=>d.value>0);
+  const dimTotalsPending   = DIM_KEYS.map((k,i)=>({label:t(DIM_LABEL_KEYS[i]),value:pending.reduce((s,v)=>s+(v[k]||0),0),color:PIE_COLORS[i]})).filter(d=>d.value>0);
 
-  const validatedValueIds = new Set(validated.map(v=>normId(v._id)));
   const chainRows = validated.map(v=>{
     const vId=normId(v._id);
     const linkedAITasks=aiTasks.filter(a=>a.relatedValue.has(vId));
@@ -360,77 +474,79 @@ function Dashboard() {
     return {value:v,aiTasks:linkedAITasks,habits:linkedHabits,frictions:linkedFrictions};
   });
 
+  const titleOf = x => x.title || t('untitled');
+
   return <div>
     <Header/>
     <div style={{padding:"28px",maxWidth:1200,margin:"0 auto"}}>
 
-      {/* PULSE */}
+      {/* ══ PULSE ══ */}
       {active==="Pulse" && <div>
-        <SectionHeader emoji="📊" title="Program Pulse" subtitle="Snapshot of the value creation chain — live from Notion."/>
+        <SectionHeader emoji="📊" title={t('section_pulse_title')} subtitle={t('section_pulse_subtitle')}/>
 
         {/* KPIs */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,marginBottom:28}}>
           {[
-            {label:"Frictions identified",value:frictions.length,sub:"all entries",color:COLORS.orange},
-            {label:"Habits active",value:habitsActive.length,sub:"Decision: Keep or Adjust",color:COLORS.green},
-            {label:"AI Tasks identified",value:aiTasks.length,sub:"all entries",color:COLORS.blue},
-            {label:"NIU avg",value:avgNIU+"/8",sub:`${validated.length} validated · ${values.length} total`,color:COLORS.purple},
+            {labelKey:'kpi_frictions',value:frictions.length,sub:t('kpi_frictions_sub'),color:COLORS.orange},
+            {labelKey:'kpi_habits',value:habitsActive.length,sub:t('kpi_habits_sub'),color:COLORS.green},
+            {labelKey:'kpi_ai_tasks',value:aiTasks.length,sub:t('kpi_ai_tasks_sub'),color:COLORS.blue},
+            {labelKey:'kpi_niu_avg',value:avgNIU+"/8",sub:t('kpi_niu_sub',{count:validated.length,total:values.length}),color:COLORS.purple},
           ].map(kpi=>
-            <Card key={kpi.label} style={{borderTop:`3px solid ${kpi.color}`}}>
+            <Card key={kpi.labelKey} style={{borderTop:`3px solid ${kpi.color}`}}>
               <div style={{fontSize:32,fontWeight:800,color:kpi.color,lineHeight:1}}>{kpi.value}</div>
-              <div style={{fontSize:13,fontWeight:600,color:COLORS.dark,marginTop:6}}>{kpi.label}</div>
+              <div style={{fontSize:13,fontWeight:600,color:COLORS.dark,marginTop:6}}>{t(kpi.labelKey)}</div>
               <div style={{fontSize:12,color:COLORS.light,marginTop:2}}>{kpi.sub}</div>
             </Card>
           )}
         </div>
 
-        {/* NIU Pie Charts — 2 colonnes */}
+        {/* NIU Pie Charts */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
           <Card>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-              <Badge text="✓ Validated" color={COLORS.green} bg={COLORS.lightGreen} border={COLORS.borderGreen}/>
-              <span style={{fontSize:12,fontWeight:700,color:COLORS.mid,textTransform:"uppercase",letterSpacing:0.5}}>NIU Breakdown</span>
+              <Badge text={t('badge_validated')} color={COLORS.green} bg={COLORS.lightGreen} border={COLORS.borderGreen}/>
+              <span style={{fontSize:12,fontWeight:700,color:COLORS.mid,textTransform:"uppercase",letterSpacing:0.5}}>{t('niu_breakdown')}</span>
             </div>
-            <div style={{fontSize:11,color:COLORS.light,marginBottom:16}}>Sum of each NIU dimension — {validated.length} validated {validated.length===1?"entry":"entries"}</div>
+            <div style={{fontSize:11,color:COLORS.light,marginBottom:16}}>{t('niu_validated_summary',{count:validated.length})}</div>
             <PieChart data={dimTotalsValidated}/>
           </Card>
           <Card>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-              <Badge text="⏳ Pending" color={COLORS.gray} bg={COLORS.lightGray} border={COLORS.borderGray}/>
-              <span style={{fontSize:12,fontWeight:700,color:COLORS.mid,textTransform:"uppercase",letterSpacing:0.5}}>NIU Breakdown</span>
+              <Badge text={t('badge_pending')} color={COLORS.gray} bg={COLORS.lightGray} border={COLORS.borderGray}/>
+              <span style={{fontSize:12,fontWeight:700,color:COLORS.mid,textTransform:"uppercase",letterSpacing:0.5}}>{t('niu_breakdown')}</span>
             </div>
-            <div style={{fontSize:11,color:COLORS.light,marginBottom:16}}>Sum of each NIU dimension — {pending.length} non-validated {pending.length===1?"entry":"entries"}</div>
+            <div style={{fontSize:11,color:COLORS.light,marginBottom:16}}>{t('niu_pending_summary',{count:pending.length})}</div>
             <PieChart data={dimTotalsPending}/>
           </Card>
         </div>
 
         {/* Value Chain */}
         <Card>
-          <div style={{fontSize:13,fontWeight:700,color:COLORS.mid,marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}}>Value Chain — Validated Value Paths</div>
-          <div style={{fontSize:11,color:COLORS.light,marginBottom:12}}>One row per Validated Value — traced back to originating Frictions</div>
+          <div style={{fontSize:13,fontWeight:700,color:COLORS.mid,marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}}>{t('value_chain_title')}</div>
+          <div style={{fontSize:11,color:COLORS.light,marginBottom:12}}>{t('value_chain_subtitle')}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1.4fr",gap:8,marginBottom:8,padding:"0 4px"}}>
-            {[{e:"🔥",l:"Friction",c:COLORS.orange},{e:"🔁",l:"Habit",c:COLORS.green},{e:"🤖",l:"AI Task",c:COLORS.blue},{e:"💰",l:"Value + NIU",c:COLORS.purple}].map(col=>
-              <div key={col.l} style={{fontSize:11,fontWeight:700,color:col.c,textTransform:"uppercase",letterSpacing:0.5}}>{col.e} {col.l}</div>
+            {[{e:"🔥",k:"col_friction",c:COLORS.orange},{e:"🔁",k:"col_habit",c:COLORS.green},{e:"🤖",k:"col_ai_task",c:COLORS.blue},{e:"💰",k:"col_value_niu",c:COLORS.purple}].map(col=>
+              <div key={col.k} style={{fontSize:11,fontWeight:700,color:col.c,textTransform:"uppercase",letterSpacing:0.5}}>{col.e} {t(col.k)}</div>
             )}
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             {chainRows.map((row,i)=>(
               <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1.4fr",gap:8,padding:"10px 12px",background:i%2===0?"#F8FAFC":"#fff",borderRadius:6,border:`1px solid ${COLORS.borderGray}`,alignItems:"center"}}>
-                <div style={{fontSize:12,color:COLORS.mid}}>{row.frictions.length?row.frictions.map(f=>f.title).join(", "):"—"}</div>
-                <div style={{fontSize:12,color:COLORS.mid}}>{row.habits.length?row.habits.map(h=>h.title).join(", "):"—"}</div>
-                <div style={{fontSize:12,color:COLORS.mid}}>{row.aiTasks.length?row.aiTasks.map(a=>a.title).join(", "):"—"}</div>
+                <div style={{fontSize:12,color:COLORS.mid}}>{row.frictions.length?row.frictions.map(titleOf).join(", "):"—"}</div>
+                <div style={{fontSize:12,color:COLORS.mid}}>{row.habits.length?row.habits.map(titleOf).join(", "):"—"}</div>
+                <div style={{fontSize:12,color:COLORS.mid}}>{row.aiTasks.length?row.aiTasks.map(titleOf).join(", "):"—"}</div>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:12,fontWeight:700,color:COLORS.dark,marginBottom:4}}>{row.value.title}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:COLORS.dark,marginBottom:4}}>{titleOf(row.value)}</div>
                   <NIUBar score={row.value.niu}/>
                 </div>
               </div>
             ))}
-            {chainRows.length===0&&<div style={{color:COLORS.light,fontSize:13,padding:"16px 0",textAlign:"center"}}>No validated values found.</div>}
+            {chainRows.length===0&&<div style={{color:COLORS.light,fontSize:13,padding:"16px 0",textAlign:"center"}}>{t('no_validated_values')}</div>}
           </div>
         </Card>
       </div>}
 
-      {/* FRICTIONS — HEATMAP */}
+      {/* ══ FRICTIONS — HEATMAP ══ */}
       {active==="Frictions" && (()=>{
         const WASTE_COLS = [
           { key:"Overhead",    color:"#2563EB", bg:"#EFF6FF", border:"#BFDBFE" },
@@ -455,10 +571,10 @@ function Dashboard() {
           <div style={{background:"#fff",border:`1.5px solid ${SEV_STYLE[f.severity]?.border||COLORS.borderGray}`,borderRadius:8,padding:"10px 12px",display:"flex",flexDirection:"column",gap:5,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:4}}>
               <span style={{fontSize:10,fontWeight:700,color:COLORS.light,letterSpacing:0.5}}>{f.id}</span>
-              {stsBadge(f.status)}
+              <StatusBadge value={f.status}/>
             </div>
-            <div style={{fontSize:12,fontWeight:700,color:COLORS.dark,lineHeight:1.3}}>{f.title}</div>
-            {f.impact&&f.impact!=="—"&&(()=>{const s=IMPACT_STYLE[f.impact]||{color:COLORS.gray,bg:COLORS.lightGray,border:COLORS.borderGray};return <Badge text={f.impact} color={s.color} bg={s.bg} border={s.border}/>;})()}
+            <div style={{fontSize:12,fontWeight:700,color:COLORS.dark,lineHeight:1.3}}>{titleOf(f)}</div>
+            {f.impact&&f.impact!=="—"&&(()=>{const s=IMPACT_STYLE[f.impact]||{color:COLORS.gray,bg:COLORS.lightGray,border:COLORS.borderGray};return <Badge text={tEnum('impact',f.impact)} color={s.color} bg={s.bg} border={s.border}/>;})()}
             {f.symptom&&<div style={{fontSize:11,color:COLORS.gray,fontStyle:"italic",marginTop:2,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{f.symptom}</div>}
           </div>
         );
@@ -466,16 +582,16 @@ function Dashboard() {
         const grid = "72px repeat(4,1fr)";
 
         return <div>
-          <SectionHeader emoji="🔥" title="Frictions Heatmap" subtitle="Each card = one friction · X axis: Waste Type · Y axis: Severity"/>
+          <SectionHeader emoji="🔥" title={t('section_frictions_title')} subtitle={t('section_frictions_subtitle')}/>
 
           {/* Legend */}
           <Card style={{marginBottom:20,padding:"12px 20px"}}>
             <div style={{display:"flex",gap:20,flexWrap:"wrap",alignItems:"center"}}>
-              <span style={{fontSize:11,fontWeight:700,color:COLORS.light,textTransform:"uppercase",letterSpacing:0.5}}>Impact →</span>
+              <span style={{fontSize:11,fontWeight:700,color:COLORS.light,textTransform:"uppercase",letterSpacing:0.5}}>{t('impact_legend')}</span>
               {Object.entries(IMPACT_STYLE).map(([k,s])=>(
                 <div key={k} style={{display:"flex",alignItems:"center",gap:6}}>
                   <div style={{width:10,height:10,borderRadius:2,background:s.color}}/>
-                  <span style={{fontSize:12,color:COLORS.dark}}>{k}</span>
+                  <span style={{fontSize:12,color:COLORS.dark}}>{tEnum('impact',k)}</span>
                 </div>
               ))}
             </div>
@@ -483,17 +599,15 @@ function Dashboard() {
 
           <Card>
             <div style={{overflowX:"auto"}}>
-              {/* Column headers */}
               <div style={{display:"grid",gridTemplateColumns:grid,gap:8,marginBottom:8}}>
                 <div/>
                 {WASTE_COLS.map(col=>(
                   <div key={col.key} style={{textAlign:"center",padding:"6px 8px",borderRadius:6,background:col.bg,border:`1px solid ${col.border}`}}>
-                    <div style={{fontSize:11,fontWeight:700,color:col.color}}>{col.key}</div>
+                    <div style={{fontSize:11,fontWeight:700,color:col.color}}>{tEnum('waste',col.key)}</div>
                   </div>
                 ))}
               </div>
 
-              {/* Rows by Severity */}
               {SEV_ROWS.map(sev=>{
                 const rowFrictions=frictions.filter(f=>f.severity===sev);
                 if(!rowFrictions.length) return null;
@@ -501,7 +615,7 @@ function Dashboard() {
                 return (
                   <div key={sev} style={{display:"grid",gridTemplateColumns:grid,gap:8,marginBottom:8,alignItems:"start"}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"8px 4px",borderRadius:6,background:s.bg,border:`1px solid ${s.border}`,minHeight:60}}>
-                      <span style={{fontSize:11,fontWeight:700,color:s.color,writingMode:"vertical-rl",transform:"rotate(180deg)",letterSpacing:0.5}}>{sev}</span>
+                      <span style={{fontSize:11,fontWeight:700,color:s.color,writingMode:"vertical-rl",transform:"rotate(180deg)",letterSpacing:0.5}}>{tEnum('severity',sev)}</span>
                     </div>
                     {WASTE_COLS.map(col=>{
                       const cards=rowFrictions.filter(f=>f.wasteType===col.key);
@@ -518,12 +632,11 @@ function Dashboard() {
                 );
               })}
 
-              {/* Unclassified — frictions with unknown severity OR unknown wasteType */}
               {(()=>{
                 const u=frictions.filter(f=>!SEV_ROWS.includes(f.severity)||!wasteKeys.has(f.wasteType));
                 if(!u.length) return null;
                 return <div style={{marginTop:12}}>
-                  <div style={{fontSize:11,fontWeight:700,color:COLORS.light,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>— Unclassified</div>
+                  <div style={{fontSize:11,fontWeight:700,color:COLORS.light,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>— {t('unclassified')}</div>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{u.map(f=><div key={f.id} style={{width:220}}><FrictionCard f={f}/></div>)}</div>
                 </div>;
               })()}
@@ -532,9 +645,9 @@ function Dashboard() {
         </div>;
       })()}
 
-      {/* HABITS */}
+      {/* ══ HABITS ══ */}
       {active==="Habits" && <div>
-        <SectionHeader emoji="🔁" title="Habits anchored" subtitle="What the team actually does differently today because of Tato."/>
+        <SectionHeader emoji="🔁" title={t('section_habits_title')} subtitle={t('section_habits_subtitle')}/>
         {(()=>{
           const groups={};
           habits.forEach(h=>{const c=h.cycle||"—";if(!groups[c])groups[c]=[];groups[c].push(h);});
@@ -543,7 +656,7 @@ function Dashboard() {
             <div key={cycle} style={{marginBottom:28}}>
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
                 <div style={{height:1,flex:1,background:COLORS.borderGray}}/>
-                <span style={{fontSize:12,fontWeight:700,color:COLORS.blue,background:COLORS.lightBlue,border:`1px solid ${COLORS.borderBlue}`,borderRadius:20,padding:"3px 14px",whiteSpace:"nowrap"}}>PDCA Cycle {cycle}</span>
+                <span style={{fontSize:12,fontWeight:700,color:COLORS.blue,background:COLORS.lightBlue,border:`1px solid ${COLORS.borderBlue}`,borderRadius:20,padding:"3px 14px",whiteSpace:"nowrap"}}>{t('pdca_cycle',{cycle})}</span>
                 <div style={{height:1,flex:1,background:COLORS.borderGray}}/>
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -551,16 +664,16 @@ function Dashboard() {
                   <Card key={h.id}>
                     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
                       <div style={{flex:1}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><span style={{fontSize:11,color:COLORS.light,fontWeight:600}}>{h.id}</span><span style={{fontWeight:700,color:COLORS.dark,fontSize:14}}>{h.title}</span></div>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><span style={{fontSize:11,color:COLORS.light,fontWeight:600}}>{h.id}</span><span style={{fontWeight:700,color:COLORS.dark,fontSize:14}}>{titleOf(h)}</span></div>
                         <div style={{display:"flex",alignItems:"center",gap:10,fontSize:13}}>
-                          <div style={{flex:1,background:COLORS.lightRed,border:`1px solid ${COLORS.borderRed}`,borderRadius:6,padding:"8px 12px"}}><div style={{fontSize:10,fontWeight:700,color:COLORS.red,textTransform:"uppercase",marginBottom:3}}>Before</div><div style={{color:COLORS.mid}}>{h.old}</div></div>
+                          <div style={{flex:1,background:COLORS.lightRed,border:`1px solid ${COLORS.borderRed}`,borderRadius:6,padding:"8px 12px"}}><div style={{fontSize:10,fontWeight:700,color:COLORS.red,textTransform:"uppercase",marginBottom:3}}>{t('before')}</div><div style={{color:COLORS.mid}}>{h.old}</div></div>
                           <span style={{color:COLORS.light,fontSize:18}}>→</span>
-                          <div style={{flex:1,background:COLORS.lightGreen,border:`1px solid ${COLORS.borderGreen}`,borderRadius:6,padding:"8px 12px"}}><div style={{fontSize:10,fontWeight:700,color:COLORS.green,textTransform:"uppercase",marginBottom:3}}>After</div><div style={{color:COLORS.mid}}>{h.new}</div></div>
+                          <div style={{flex:1,background:COLORS.lightGreen,border:`1px solid ${COLORS.borderGreen}`,borderRadius:6,padding:"8px 12px"}}><div style={{fontSize:10,fontWeight:700,color:COLORS.green,textTransform:"uppercase",marginBottom:3}}>{t('after')}</div><div style={{color:COLORS.mid}}>{h.new}</div></div>
                         </div>
                       </div>
                       <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end",minWidth:130}}>
-                        {resBadge(h.result)}
-                        <Badge text={h.decision==="Keep"?"✓ Keep":h.decision} color={h.decision==="Keep"?COLORS.green:h.decision==="Adjust"?COLORS.orange:COLORS.gray} bg={h.decision==="Keep"?COLORS.lightGreen:h.decision==="Adjust"?COLORS.lightOrange:COLORS.lightGray} border={h.decision==="Keep"?COLORS.borderGreen:h.decision==="Adjust"?COLORS.borderOrange:COLORS.borderGray}/>
+                        <ResultBadge value={h.result}/>
+                        <DecisionBadge value={h.decision}/>
                         <Badge text={h.owner} color={COLORS.purple} bg={COLORS.lightPurple} border={COLORS.borderPurple}/>
                       </div>
                     </div>
@@ -572,16 +685,21 @@ function Dashboard() {
         })()}
       </div>}
 
-      {/* AI TASKS */}
+      {/* ══ AI TASKS ══ */}
       {active==="AI Tasks" && <div>
-        <SectionHeader emoji="🤖" title="AI Tasks in regular use" subtitle="How work has changed — tasks where Tato is embedded in recurring execution."/>
+        <SectionHeader emoji="🤖" title={t('section_ai_tasks_title')} subtitle={t('section_ai_tasks_subtitle')}/>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {aiTasks.map(t=>
-            <Card key={t.id}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><span style={{fontSize:11,color:COLORS.light,fontWeight:600}}>{t.id}</span><span style={{fontWeight:700,color:COLORS.dark,fontSize:14}}>{t.title}</span>{frqBadge(t.freq)}{t.capability&&<Badge text={t.capability} color={COLORS.purple} bg={COLORS.lightPurple} border={COLORS.borderPurple}/>}</div>
+          {aiTasks.map(task=>
+            <Card key={task.id}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,color:COLORS.light,fontWeight:600}}>{task.id}</span>
+                <span style={{fontWeight:700,color:COLORS.dark,fontSize:14}}>{titleOf(task)}</span>
+                <FreqBadge value={task.freq}/>
+                {task.capability&&task.capability!=="—"&&<Badge text={tEnum('capability',task.capability)} color={COLORS.purple} bg={COLORS.lightPurple} border={COLORS.borderPurple}/>}
+              </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,fontSize:12}}>
-                {[{label:"Before AI",val:t.original,c:COLORS.gray,bg:COLORS.lightGray},{label:"AI contribution",val:t.contribution,c:COLORS.blue,bg:COLORS.lightBlue},{label:"Human role after AI",val:t.humanRole,c:COLORS.green,bg:COLORS.lightGreen}].map(col=>
-                  <div key={col.label} style={{background:col.bg,borderRadius:6,padding:"10px 12px"}}><div style={{fontSize:10,fontWeight:700,color:col.c,textTransform:"uppercase",marginBottom:4}}>{col.label}</div><div style={{color:COLORS.mid}}>{col.val}</div></div>
+                {[{labelKey:'before_ai',val:task.original,c:COLORS.gray,bg:COLORS.lightGray},{labelKey:'ai_contribution',val:task.contribution,c:COLORS.blue,bg:COLORS.lightBlue},{labelKey:'human_role_after_ai',val:task.humanRole,c:COLORS.green,bg:COLORS.lightGreen}].map(col=>
+                  <div key={col.labelKey} style={{background:col.bg,borderRadius:6,padding:"10px 12px"}}><div style={{fontSize:10,fontWeight:700,color:col.c,textTransform:"uppercase",marginBottom:4}}>{t(col.labelKey)}</div><div style={{color:COLORS.mid}}>{col.val}</div></div>
                 )}
               </div>
             </Card>
@@ -589,27 +707,27 @@ function Dashboard() {
         </div>
       </div>}
 
-      {/* VALUE — HEATMAP */}
+      {/* ══ VALUE — HEATMAP ══ */}
       {active==="Value" && <div>
-        <SectionHeader emoji="💰" title="Value Heatmap" subtitle="Chaque carte = une entrée VAL · Axe X : intensité NIU · Axe Y : niveau de confiance"/>
+        <SectionHeader emoji="💰" title={t('section_value_title')} subtitle={t('section_value_subtitle')}/>
         <Card style={{marginBottom:20,padding:"12px 20px"}}>
           <div style={{display:"flex",gap:24,flexWrap:"wrap",alignItems:"center"}}>
-            <span style={{fontSize:11,fontWeight:700,color:COLORS.light,textTransform:"uppercase",letterSpacing:0.5}}>NIU Score →</span>
+            <span style={{fontSize:11,fontWeight:700,color:COLORS.light,textTransform:"uppercase",letterSpacing:0.5}}>{t('niu_score_label')}</span>
             {NIU_COLS.map((col,i)=>(
-              <div key={col.label} style={{display:"flex",alignItems:"center",gap:6}}>
+              <div key={col.labelKey} style={{display:"flex",alignItems:"center",gap:6}}>
                 <div style={{width:10,height:10,borderRadius:2,background:COL_STYLE[i].hdr.color}}/>
-                <span style={{fontSize:12,color:COLORS.dark}}><strong style={{color:COL_STYLE[i].hdr.color}}>{col.range}</strong> — {col.label}</span>
+                <span style={{fontSize:12,color:COLORS.dark}}><strong style={{color:COL_STYLE[i].hdr.color}}>{col.range}</strong> — {t(col.labelKey)}</span>
               </div>
             ))}
           </div>
         </Card>
         {values.length===0
-          ?<Card><div style={{color:COLORS.gray,textAlign:"center",padding:24}}>No value data found.</div></Card>
+          ?<Card><div style={{color:COLORS.gray,textAlign:"center",padding:24}}>{t('no_value_data')}</div></Card>
           :<Card><ValueHeatmap values={values}/></Card>
         }
       </div>}
 
-      {/* WASTE-TO-VALUE */}
+      {/* ══ WASTE-TO-VALUE ══ */}
       {active==="W2V" && (()=>{
         const WASTE_TYPES = [
           { key:"Overhead",    color:"#2563EB", bg:"#EFF6FF", border:"#BFDBFE", emoji:"⚙️" },
@@ -618,77 +736,55 @@ function Dashboard() {
           { key:"Scope Creep", color:"#CA8A04", bg:"#FEFCE8", border:"#FEF08A", emoji:"📐" },
         ];
 
-        // Build chain: Friction → PDCA → AITask → Value
-        // For each waste type, collect frictions, then walk relations
         const tiles = WASTE_TYPES.map(wt => {
           const wtFrictions = frictions.filter(f => f.wasteType === wt.key);
-
-          // Collect all PDCA IDs linked from these frictions
           const linkedPDCAIds = new Set();
           wtFrictions.forEach(f => f.relatedPDCA.forEach(id => linkedPDCAIds.add(id)));
-
-          // Find habits whose _id matches
           const linkedHabits = habits.filter(h => linkedPDCAIds.has(normId(h._id)));
-
-          // Collect all AITask IDs linked from these habits
           const linkedAITaskIds = new Set();
           linkedHabits.forEach(h => h.relatedAITask.forEach(id => linkedAITaskIds.add(id)));
-
-          // Find AI tasks
           const linkedAITasks = aiTasks.filter(a => linkedAITaskIds.has(normId(a._id)));
-
-          // Collect all Value IDs linked from these AI tasks
           const linkedValueIds = new Set();
           linkedAITasks.forEach(a => a.relatedValue.forEach(id => linkedValueIds.add(id)));
-
-          // Find values
           const linkedValues = values.filter(v => linkedValueIds.has(normId(v._id)));
-
-          // Compute avg NIU
           const avgNiu = linkedValues.length
             ? Math.round((linkedValues.reduce((s,v) => s+v.niu, 0) / linkedValues.length) * 10) / 10
             : null;
-
           return { ...wt, wtFrictions, linkedHabits, linkedAITasks, linkedValues, avgNiu };
         });
 
         return <div>
-          <SectionHeader emoji="🔗" title="Waste-to-Value" subtitle="How each type of waste traces through to value creation — via Habits, AI Tasks, and NIU Score."/>
+          <SectionHeader emoji="🔗" title={t('section_w2v_title')} subtitle={t('section_w2v_subtitle')}/>
 
           {/* Summary tiles */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,marginBottom:28}}>
-            {tiles.map(t => {
-              const {color,label:niuLabel} = t.avgNiu!==null ? NIU_LABEL(t.avgNiu) : {color:COLORS.light,label:"No data"};
+            {tiles.map(tile => {
+              const band = tile.avgNiu!==null ? NIU_LABEL(tile.avgNiu) : {color:COLORS.light,labelKey:'no_data'};
               return (
-                <Card key={t.key} style={{borderTop:`3px solid ${t.color}`}}>
+                <Card key={tile.key} style={{borderTop:`3px solid ${tile.color}`}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-                    <span style={{fontSize:18}}>{t.emoji}</span>
-                    <span style={{fontSize:13,fontWeight:700,color:t.color}}>{t.key}</span>
+                    <span style={{fontSize:18}}>{tile.emoji}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:tile.color}}>{tEnum('waste',tile.key)}</span>
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:8,fontSize:12}}>
-                    <div style={{display:"flex",justifyContent:"space-between"}}>
-                      <span style={{color:COLORS.gray}}>Frictions</span>
-                      <span style={{fontWeight:700,color:COLORS.dark}}>{t.wtFrictions.length}</span>
-                    </div>
-                    <div style={{display:"flex",justifyContent:"space-between"}}>
-                      <span style={{color:COLORS.gray}}>Habits</span>
-                      <span style={{fontWeight:700,color:COLORS.dark}}>{t.linkedHabits.length}</span>
-                    </div>
-                    <div style={{display:"flex",justifyContent:"space-between"}}>
-                      <span style={{color:COLORS.gray}}>AI Tasks</span>
-                      <span style={{fontWeight:700,color:COLORS.dark}}>{t.linkedAITasks.length}</span>
-                    </div>
-                    <div style={{display:"flex",justifyContent:"space-between"}}>
-                      <span style={{color:COLORS.gray}}>Value entries</span>
-                      <span style={{fontWeight:700,color:COLORS.dark}}>{t.linkedValues.length}</span>
-                    </div>
+                    {[
+                      {k:'frictions_label',    n:tile.wtFrictions.length},
+                      {k:'habits_label',       n:tile.linkedHabits.length},
+                      {k:'ai_tasks_label',     n:tile.linkedAITasks.length},
+                      {k:'value_entries_label',n:tile.linkedValues.length},
+                    ].map(row=>(
+                      <div key={row.k} style={{display:"flex",justifyContent:"space-between"}}>
+                        <span style={{color:COLORS.gray}}>{t(row.k)}</span>
+                        <span style={{fontWeight:700,color:COLORS.dark}}>{row.n}</span>
+                      </div>
+                    ))}
                     <div style={{marginTop:4,paddingTop:8,borderTop:`1px solid ${COLORS.borderGray}`}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                        <span style={{fontSize:11,fontWeight:700,color:COLORS.light,textTransform:"uppercase",letterSpacing:0.3}}>Avg NIU</span>
-                        <span style={{fontSize:16,fontWeight:800,color}}>{t.avgNiu!==null?`${t.avgNiu}/8`:"—"}</span>
+                        <span style={{fontSize:11,fontWeight:700,color:COLORS.light,textTransform:"uppercase",letterSpacing:0.3}}>{t('avg_niu_label')}</span>
+                        <span style={{fontSize:16,fontWeight:800,color:band.color}}>{tile.avgNiu!==null?`${tile.avgNiu}/8`:"—"}</span>
                       </div>
-                      {t.avgNiu!==null && <NIUBar score={t.avgNiu}/>}
-                      <div style={{fontSize:11,color,fontWeight:600,marginTop:4}}>{niuLabel}</div>
+                      {tile.avgNiu!==null && <NIUBar score={tile.avgNiu}/>}
+                      <div style={{fontSize:11,color:band.color,fontWeight:600,marginTop:4}}>{t(band.labelKey)}</div>
                     </div>
                   </div>
                 </Card>
@@ -696,30 +792,28 @@ function Dashboard() {
             })}
           </div>
 
-          {/* Detail rows — one per waste type */}
-          {tiles.map(t => (
-            <Card key={t.key} style={{marginBottom:16}}>
-              {/* Header */}
+          {/* Detail rows */}
+          {tiles.map(tile => (
+            <Card key={tile.key} style={{marginBottom:16}}>
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${COLORS.borderGray}`}}>
-                <span style={{fontSize:16}}>{t.emoji}</span>
-                <span style={{fontSize:14,fontWeight:700,color:t.color}}>{t.key}</span>
+                <span style={{fontSize:16}}>{tile.emoji}</span>
+                <span style={{fontSize:14,fontWeight:700,color:tile.color}}>{tEnum('waste',tile.key)}</span>
                 <div style={{flex:1}}/>
-                {t.avgNiu!==null && <>
-                  <span style={{fontSize:11,color:COLORS.light}}>Avg NIU</span>
-                  <span style={{fontSize:14,fontWeight:800,color:NIU_LABEL(t.avgNiu).color}}>{t.avgNiu}/8</span>
+                {tile.avgNiu!==null && <>
+                  <span style={{fontSize:11,color:COLORS.light}}>{t('avg_niu_label')}</span>
+                  <span style={{fontSize:14,fontWeight:800,color:NIU_LABEL(tile.avgNiu).color}}>{tile.avgNiu}/8</span>
                 </>}
               </div>
 
-              {/* 4-column chain */}
               <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr auto 1fr auto 1fr",gap:8,alignItems:"start"}}>
                 {/* Frictions */}
                 <div>
-                  <div style={{fontSize:10,fontWeight:700,color:COLORS.orange,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>🔥 Frictions ({t.wtFrictions.length})</div>
-                  {t.wtFrictions.length===0
+                  <div style={{fontSize:10,fontWeight:700,color:COLORS.orange,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{"🔥 " + t('frictions_label') + ` (${tile.wtFrictions.length})`}</div>
+                  {tile.wtFrictions.length===0
                     ? <div style={{fontSize:12,color:COLORS.light,fontStyle:"italic"}}>—</div>
-                    : t.wtFrictions.map(f=>(
+                    : tile.wtFrictions.map(f=>(
                         <div key={f.id} style={{fontSize:11,color:COLORS.mid,background:COLORS.lightOrange,border:`1px solid ${COLORS.borderOrange}`,borderRadius:6,padding:"5px 8px",marginBottom:4}}>
-                          <span style={{fontWeight:700,color:COLORS.orange}}>{f.id}</span> · {f.title}
+                          <span style={{fontWeight:700,color:COLORS.orange}}>{f.id}</span> · {titleOf(f)}
                         </div>
                       ))
                   }
@@ -728,12 +822,12 @@ function Dashboard() {
 
                 {/* Habits */}
                 <div>
-                  <div style={{fontSize:10,fontWeight:700,color:COLORS.green,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>🔁 Habits ({t.linkedHabits.length})</div>
-                  {t.linkedHabits.length===0
+                  <div style={{fontSize:10,fontWeight:700,color:COLORS.green,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{"🔁 " + t('habits_label') + ` (${tile.linkedHabits.length})`}</div>
+                  {tile.linkedHabits.length===0
                     ? <div style={{fontSize:12,color:COLORS.light,fontStyle:"italic"}}>—</div>
-                    : t.linkedHabits.map(h=>(
+                    : tile.linkedHabits.map(h=>(
                         <div key={h.id} style={{fontSize:11,color:COLORS.mid,background:COLORS.lightGreen,border:`1px solid ${COLORS.borderGreen}`,borderRadius:6,padding:"5px 8px",marginBottom:4}}>
-                          <span style={{fontWeight:700,color:COLORS.green}}>{h.id}</span> · {h.title}
+                          <span style={{fontWeight:700,color:COLORS.green}}>{h.id}</span> · {titleOf(h)}
                         </div>
                       ))
                   }
@@ -742,12 +836,12 @@ function Dashboard() {
 
                 {/* AI Tasks */}
                 <div>
-                  <div style={{fontSize:10,fontWeight:700,color:COLORS.blue,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>🤖 AI Tasks ({t.linkedAITasks.length})</div>
-                  {t.linkedAITasks.length===0
+                  <div style={{fontSize:10,fontWeight:700,color:COLORS.blue,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{"🤖 " + t('ai_tasks_label') + ` (${tile.linkedAITasks.length})`}</div>
+                  {tile.linkedAITasks.length===0
                     ? <div style={{fontSize:12,color:COLORS.light,fontStyle:"italic"}}>—</div>
-                    : t.linkedAITasks.map(a=>(
+                    : tile.linkedAITasks.map(a=>(
                         <div key={a.id} style={{fontSize:11,color:COLORS.mid,background:COLORS.lightBlue,border:`1px solid ${COLORS.borderBlue}`,borderRadius:6,padding:"5px 8px",marginBottom:4}}>
-                          <span style={{fontWeight:700,color:COLORS.blue}}>{a.id}</span> · {a.title}
+                          <span style={{fontWeight:700,color:COLORS.blue}}>{a.id}</span> · {titleOf(a)}
                         </div>
                       ))
                   }
@@ -756,15 +850,15 @@ function Dashboard() {
 
                 {/* Values */}
                 <div>
-                  <div style={{fontSize:10,fontWeight:700,color:COLORS.purple,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>💰 Value ({t.linkedValues.length})</div>
-                  {t.linkedValues.length===0
+                  <div style={{fontSize:10,fontWeight:700,color:COLORS.purple,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{"💰 " + t('value_label') + ` (${tile.linkedValues.length})`}</div>
+                  {tile.linkedValues.length===0
                     ? <div style={{fontSize:12,color:COLORS.light,fontStyle:"italic"}}>—</div>
-                    : t.linkedValues.map(v=>{
+                    : tile.linkedValues.map(v=>{
                         const {color} = NIU_LABEL(v.niu);
                         return (
                           <div key={v.id} style={{fontSize:11,color:COLORS.mid,background:COLORS.lightPurple,border:`1px solid ${COLORS.borderPurple}`,borderRadius:6,padding:"5px 8px",marginBottom:4}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                              <span><span style={{fontWeight:700,color:COLORS.purple}}>{v.id}</span> · {v.title}</span>
+                              <span><span style={{fontWeight:700,color:COLORS.purple}}>{v.id}</span> · {titleOf(v)}</span>
                               <span style={{fontWeight:800,color,fontSize:12,marginLeft:8}}>{v.niu}/8</span>
                             </div>
                             <NIUBar score={v.niu}/>
@@ -779,32 +873,36 @@ function Dashboard() {
         </div>;
       })()}
 
-      {/* PIPELINE */}
+      {/* ══ PIPELINE ══ */}
       {active==="Pipeline" && <div>
-        <SectionHeader emoji="🔮" title="Value pipeline" subtitle="What the program is about to produce."/>
+        <SectionHeader emoji="🔮" title={t('section_pipeline_title')} subtitle={t('section_pipeline_subtitle')}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
           <div>
-            <div style={{fontSize:13,fontWeight:700,color:COLORS.mid,marginBottom:12,textTransform:"uppercase",letterSpacing:0.5}}>Value pending validation</div>
+            <div style={{fontSize:13,fontWeight:700,color:COLORS.mid,marginBottom:12,textTransform:"uppercase",letterSpacing:0.5}}>{t('pipeline_value_pending')}</div>
             {values.filter(v=>v.sponsor!=="Validated").map(v=>
               <Card key={v.id} style={{marginBottom:10}}>
-                <div style={{fontWeight:700,color:COLORS.dark,fontSize:13,marginBottom:6}}>{v.title}</div>
+                <div style={{fontWeight:700,color:COLORS.dark,fontSize:13,marginBottom:6}}>{titleOf(v)}</div>
                 <div style={{fontSize:12,color:COLORS.gray,marginBottom:8}}>{v.estimate}</div>
                 <NIUBar score={v.niu}/>
                 <div style={{marginTop:6,display:"flex",gap:6,flexWrap:"wrap"}}>
-                  <Badge text={v.type} color={COLORS.blue} bg={COLORS.lightBlue} border={COLORS.borderBlue}/>
-                  <Badge text={`Confidence: ${v.confidence}`} color={v.confidence==="High"?COLORS.green:v.confidence==="Medium"?COLORS.yellow:COLORS.red} bg={v.confidence==="High"?COLORS.lightGreen:v.confidence==="Medium"?COLORS.lightYellow:COLORS.lightRed} border={COLORS.borderGray}/>
-                  {sponsorBadge(v.sponsor)}
+                  <Badge text={tEnum('valueType',v.type)} color={COLORS.blue} bg={COLORS.lightBlue} border={COLORS.borderBlue}/>
+                  <Badge text={t('confidence_prefix',{level:tEnum('confidence',v.confidence)})} color={v.confidence==="High"?COLORS.green:v.confidence==="Medium"?COLORS.yellow:COLORS.red} bg={v.confidence==="High"?COLORS.lightGreen:v.confidence==="Medium"?COLORS.lightYellow:COLORS.lightRed} border={COLORS.borderGray}/>
+                  <SponsorBadge value={v.sponsor}/>
                 </div>
               </Card>
             )}
           </div>
           <div>
-            <div style={{fontSize:13,fontWeight:700,color:COLORS.mid,marginBottom:12,textTransform:"uppercase",letterSpacing:0.5}}>PDCA experiments in progress</div>
+            <div style={{fontSize:13,fontWeight:700,color:COLORS.mid,marginBottom:12,textTransform:"uppercase",letterSpacing:0.5}}>{t('pipeline_pdca_progress')}</div>
             {habits.filter(h=>h.result==="Pending"||h.result==="Partial").map(h=>
               <Card key={h.id} style={{marginBottom:10}}>
-                <div style={{fontWeight:700,color:COLORS.dark,fontSize:13,marginBottom:6}}>{h.title}</div>
-                <div style={{display:"flex",gap:6,marginBottom:8}}>{resBadge(h.result)}<Badge text={h.cycle} color={COLORS.blue} bg={COLORS.lightBlue} border={COLORS.borderBlue}/><Badge text={h.owner} color={COLORS.purple} bg={COLORS.lightPurple} border={COLORS.borderPurple}/></div>
-                <div style={{fontSize:12,color:COLORS.gray}}><span style={{color:COLORS.light}}>Before: </span>{h.old} → <strong style={{color:COLORS.green}}>{h.new}</strong></div>
+                <div style={{fontWeight:700,color:COLORS.dark,fontSize:13,marginBottom:6}}>{titleOf(h)}</div>
+                <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+                  <ResultBadge value={h.result}/>
+                  <Badge text={h.cycle} color={COLORS.blue} bg={COLORS.lightBlue} border={COLORS.borderBlue}/>
+                  <Badge text={h.owner} color={COLORS.purple} bg={COLORS.lightPurple} border={COLORS.borderPurple}/>
+                </div>
+                <div style={{fontSize:12,color:COLORS.gray}}><span style={{color:COLORS.light}}>{t('before_prefix')}</span>{h.old} → <strong style={{color:COLORS.green}}>{h.new}</strong></div>
               </Card>
             )}
           </div>
@@ -815,8 +913,33 @@ function Dashboard() {
   </div>;
 }
 
+// ══════════════════════════════════════════════════════════════
+// App — détient la langue, fournit le contexte
+// ══════════════════════════════════════════════════════════════
+function App() {
+  const [lang, setLangState] = React.useState(() => {
+    try { const s = localStorage.getItem('nyll_lang'); if (s && window.TRANSLATIONS[s]) return s; } catch(e) {}
+    return window.CURRENT_LANG || window.I18N_DEFAULT_LANG || 'fr';
+  });
+
+  const i18n = React.useMemo(() => makeI18n(lang), [lang]);
+
+  // mutation synchrone AVANT le setState : plus de render avec une langue périmée
+  const setLang = React.useCallback(l => { window.CURRENT_LANG = l; setLangState(l); }, []);
+
+  React.useEffect(() => {
+    window.CURRENT_LANG = lang;
+    try { localStorage.setItem('nyll_lang', lang); } catch(e) {}
+    document.documentElement.lang = lang;
+    document.title = i18n.t('page_title');
+  }, [lang, i18n]);
+
+  const ctx = React.useMemo(() => ({...i18n, setLang}), [i18n, setLang]);
+  return <I18nCtx.Provider value={ctx}><Dashboard/></I18nCtx.Provider>;
+}
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<Dashboard/>);
+root.render(<App/>);
 </script>
 </body>
 </html>
