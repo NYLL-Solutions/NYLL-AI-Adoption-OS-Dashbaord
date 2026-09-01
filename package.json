@@ -1,5 +1,6 @@
 {
   "name": "nyll-ai-adoption-os-dashbaord",
+  "type": "module",
   "version": "1.0.0",
   "description": "Dashboard of the NYLL AI Adoption OS",
   "main": "translations.js",
