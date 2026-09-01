@@ -119,7 +119,7 @@ const ENUM_MAP = {
   waste: {
     "Overhead":"Overhead", "Surcharge administrative":"Overhead", "Surcharge":"Overhead", "Surcoût":"Overhead", "Coûts indirects":"Overhead",
     "Idle Time":"Idle Time", "Temps d'attente":"Idle Time", "Temps mort":"Idle Time", "Temps d'inactivité":"Idle Time", "Attente":"Idle Time",
-    "Rework":"Rework", "Reprise":"Rework", "Retouches":"Rework", "Retouche":"Rework", "Reprise de travail":"Rework",
+    "Rework":"Rework", "Reprise":"Rework", "Retouches":"Rework", "Retouche":"Rework", "Reprise de travail":"Rework", "Retravail":"Rework",
     "Scope Creep":"Scope Creep", "Dérive de portée":"Scope Creep", "Dérive de périmètre":"Scope Creep", "Dépassement de portée":"Scope Creep",
   },
   impact: {
@@ -561,11 +561,45 @@ function Dashboard() {
       <div style={{display:"flex",gap:8,alignItems:"center"}}>
         <Badge text={loading?`⟳ ${t('syncing')}`:`● ${t('live')}`} color={loading?COLORS.orange:COLORS.green} bg={loading?COLORS.lightOrange:COLORS.lightGreen} border={loading?COLORS.borderOrange:COLORS.borderGreen}/>
         <button onClick={loadData} disabled={loading} style={{background:COLORS.lightBlue,color:COLORS.blue,border:`1px solid ${COLORS.borderBlue}`,borderRadius:6,padding:"6px 12px",cursor:loading?"not-allowed":"pointer",fontWeight:600,fontSize:12}}>{"↺ " + t('refresh')}</button>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          {['en','fr'].map(l=>(
-            <button key={l} onClick={()=>setLang(l)} style={{padding:"6px 10px",borderRadius:6,border:`1px solid ${lang===l?COLORS.borderBlue:COLORS.borderGray}`,background:lang===l?COLORS.lightBlue:'transparent',cursor:'pointer',fontWeight:lang===l?700:500,fontSize:12,color:lang===l?COLORS.blue:COLORS.gray}}>{l.toUpperCase()}</button>
-          ))}
-        </div>
+        {(() => {
+          const LANGS = ['fr','en'], W = 42, H = 26;
+          const i = LANGS.indexOf(lang);
+          const toggle = () => setLang(LANGS[(i + 1) % LANGS.length]);
+          return (
+            <div
+              onClick={toggle}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+              role="switch"
+              aria-checked={lang === 'en'}
+              aria-label="Langue / Language"
+              tabIndex={0}
+              title={lang === 'fr' ? 'Switch to English' : 'Passer en français'}
+              style={{
+                position:"relative", display:"flex", flexShrink:0,
+                width:W*2+4, height:H+4, padding:2,
+                background:COLORS.lightGray,
+                border:`1px solid ${COLORS.borderGray}`,
+                borderRadius:999, cursor:"pointer", userSelect:"none",
+              }}>
+              <div style={{
+                position:"absolute", top:2, left:2, width:W, height:H,
+                borderRadius:999, background:"#fff",
+                boxShadow:"0 1px 3px rgba(0,0,0,0.14)",
+                transform:`translateX(${i*W}px)`,
+                transition:"transform 180ms cubic-bezier(.4,0,.2,1)",
+              }}/>
+              {LANGS.map(l => (
+                <div key={l} style={{
+                  position:"relative", width:W, height:H,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:11, fontWeight:700, letterSpacing:0.5,
+                  color: lang === l ? COLORS.blue : COLORS.light,
+                  transition:"color 180ms",
+                }}>{l.toUpperCase()}</div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
     </div>
     <div style={{background:"#fff",borderBottom:`1px solid ${COLORS.borderGray}`,padding:"6px 24px",display:"flex",gap:4,overflowX:"auto"}}>{NAV.map(navBtn)}</div>
