@@ -130,7 +130,7 @@
       impact:     { Time: 'Time', Risk: 'Risk', Quality: 'Quality' },
       confidence: { High: 'High', Medium: 'Medium', Low: 'Low' },
       valueType:  { Time: 'Time', Quality: 'Quality', Cost: 'Cost', Risk: 'Risk' },
-      area:       { Meetings:'Meetings', Governance:'Governance', Delivery:'Delivery', Sales:'Sales', Reporting:'Reporting', Onboarding:'Onboarding' },
+      area:       { Governance:'Governance', Meetings:'Meetings', Planning:'Planning', Scope:'Scope', Delivery:'Delivery', Reporting:'Reporting', Onboarding:'Onboarding' },
       capability: {},
     },
   };
@@ -251,10 +251,11 @@
       frequency:  { Daily: 'Quotidien', Weekly: 'Hebdomadaire', Monthly: 'Mensuel', 'Ad hoc': 'Ad hoc' },
       sponsor:    { Validated: 'Validé', 'In Review': 'En revue', 'On Hold': 'En pause', 'Needs revision': 'À réviser', Pending: 'En attente' },
       waste:      { Overhead: 'Amdin : Surcharge', 'Idle Time': 'Temps mort', Rework: 'Reprise', 'Scope Creep': 'Dérive de portée' },
+      waste:      { Overhead:'Admin : Surcharge', 'Idle Time':'Temps mort', Rework:'Reprise', 'Scope Creep':'Dérive de portée' },
+      area:       { Governance:'Gouvernance', Meetings:'Réunions', Planning:'Planification', Scope:'Portée', Delivery:'Livraison', Reporting:'Reporting', Onboarding:'Intégration' },
       impact:     { Time: 'Temps', Risk: 'Risque', Quality: 'Qualité' },
       confidence: { High: 'élevée', Medium: 'moyenne', Low: 'faible' },
       valueType:  { Time: 'Temps', Quality: 'Qualité', Cost: 'Coût', Risk: 'Risque' },
-      area:       { Meetings:'Réunions', Governance:'Gouvernance', Delivery:'Livraison', Sales:'Ventes', Reporting:'Reporting', Onboarding:'Intégration'},
       capability: {},
     },
   };

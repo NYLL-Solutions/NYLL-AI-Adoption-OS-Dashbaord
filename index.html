@@ -56,7 +56,7 @@ function makeI18n(lang) {
     return s;
   };
 
-  // valeurs métier (Notion) : fallback sur la valeur brute si non mappée
+  // valeurs métier déjà canonisées en anglais par les parsers
   const tEnum = (ns, value) => {
     if (value === undefined || value === null || value === "" || value === "—") return "—";
     const k = `enum.${ns}.${value}`;
@@ -66,6 +66,105 @@ function makeI18n(lang) {
 
   return { lang, t, tEnum };
 }
+
+// ══════════════════════════════════════════════════════════════
+// Normalisation — clé insensible à la casse, aux accents,
+// aux apostrophes typographiques et à la ponctuation
+// ══════════════════════════════════════════════════════════════
+const keyish = s => String(s ?? "")
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[\u2018\u2019\u02BC`´]/g, "'")
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '');
+
+// Vocabulaire Notion → anglais canonique, par champ.
+// Ajoute ici toute valeur que tu vois apparaître dans window.__RAW (voir console).
+const ENUM_MAP = {
+  severity: {
+    "High":"High", "Élevée":"High", "Elevee":"High", "Élevé":"High", "Haute":"High", "Critique":"High",
+    "Medium":"Medium", "Moyenne":"Medium", "Moyen":"Medium",
+    "Low":"Low", "Faible":"Low", "Basse":"Low",
+  },
+  status: {
+    "Observed":"Observed", "Observé":"Observed", "Observée":"Observed",
+    "Addressed":"Addressed", "En cours de traitement":"Addressed", "Traité":"Addressed", "Traitée":"Addressed", "En traitement":"Addressed",
+    "Resolved":"Resolved", "Résolu":"Resolved", "Résolue":"Resolved",
+    "Monitoring":"Monitoring", "Sous surveillance":"Monitoring", "Surveillance":"Monitoring",
+  },
+  result: {
+    "Observed":"Observed", "Observé":"Observed", "Observée":"Observed",
+    "Partial":"Partial", "Partiel":"Partial", "Partielle":"Partial",
+    "Not observed":"Not observed", "Non observé":"Not observed", "Non observée":"Not observed",
+    "Pending":"Pending", "En attente":"Pending",
+  },
+  decision: {
+    "Keep":"Keep", "Conserver":"Keep", "À conserver":"Keep", "Garder":"Keep",
+    "Adjust":"Adjust", "Ajuster":"Adjust", "À ajuster":"Adjust",
+    "Drop":"Drop", "Abandonner":"Drop", "Abandon":"Drop",
+    "Pending":"Pending", "En attente":"Pending",
+  },
+  frequency: {
+    "Daily":"Daily", "Quotidien":"Daily", "Quotidienne":"Daily",
+    "Weekly":"Weekly", "Hebdomadaire":"Weekly",
+    "Monthly":"Monthly", "Mensuel":"Monthly", "Mensuelle":"Monthly",
+    "Ad hoc":"Ad hoc", "À la demande":"Ad hoc", "Ponctuel":"Ad hoc", "Ponctuelle":"Ad hoc",
+  },
+  sponsor: {
+    "Validated":"Validated", "Validé":"Validated", "Validée":"Validated",
+    "In Review":"In Review", "En revue":"In Review", "En cours de validation":"In Review", "En révision":"In Review",
+    "On Hold":"On Hold", "En pause":"On Hold", "Suspendu":"On Hold",
+    "Needs revision":"Needs revision", "À réviser":"Needs revision", "À revoir":"Needs revision",
+    "Pending":"Pending", "En attente":"Pending",
+  },
+  waste: {
+    "Overhead":"Overhead", "Surcharge administrative":"Overhead", "Surcharge":"Overhead", "Surcoût":"Overhead", "Coûts indirects":"Overhead",
+    "Idle Time":"Idle Time", "Temps d'attente":"Idle Time", "Temps mort":"Idle Time", "Temps d'inactivité":"Idle Time", "Attente":"Idle Time",
+    "Rework":"Rework", "Reprise":"Rework", "Retouches":"Rework", "Retouche":"Rework", "Reprise de travail":"Rework",
+    "Scope Creep":"Scope Creep", "Dérive de portée":"Scope Creep", "Dérive de périmètre":"Scope Creep", "Dépassement de portée":"Scope Creep",
+  },
+  impact: {
+    "Time":"Time", "Temps":"Time",
+    "Risk":"Risk", "Risque":"Risk",
+    "Quality":"Quality", "Qualité":"Quality",
+  },
+  confidence: {
+    "High":"High", "Élevée":"High", "Élevé":"High", "Haute":"High",
+    "Medium":"Medium", "Moyenne":"Medium", "Moyen":"Medium",
+    "Low":"Low", "Faible":"Low", "Basse":"Low",
+  },
+  valueType: {
+    "Time":"Time", "Temps":"Time",
+    "Quality":"Quality", "Qualité":"Quality",
+    "Cost":"Cost", "Coût":"Cost",
+    "Risk":"Risk", "Risque":"Risk",
+  },
+  area: {
+    "Governance":"Governance", "Gouvernance":"Governance",
+    "Meetings":"Meetings", "Réunions":"Meetings", "Rencontres":"Meetings",
+    "Planning":"Planning", "Planification":"Planning",
+    "Scope":"Scope", "Portée":"Scope", "Périmètre":"Scope",
+    "Delivery":"Delivery", "Livraison":"Delivery",
+    "Reporting":"Reporting",
+    "Onboarding":"Onboarding", "Intégration":"Onboarding",
+  },
+};
+
+// index pré-calculé : keyish(valeur) → valeur canonique
+const ENUM_IDX = Object.fromEntries(
+  Object.entries(ENUM_MAP).map(([ns, m]) => [
+    ns,
+    Object.fromEntries(Object.entries(m).map(([k, v]) => [keyish(k), v])),
+  ])
+);
+
+// E('severity', 'Élevée') → 'High' ; valeur inconnue → renvoyée telle quelle (et visible comme « non classé »)
+const E = (ns, value) => {
+  if (value === undefined || value === null) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const hit = ENUM_IDX[ns] && ENUM_IDX[ns][keyish(raw)];
+  return hit !== undefined ? hit : raw;
+};
 
 // ══════════════════════════════════════════════════════════════
 // Data layer
@@ -81,9 +180,19 @@ async function fetchNotionData(sourceKey) {
   return json.data;
 }
 
+// nf : cherche une colonne par n'importe lequel de ses alias, en ignorant
+// casse / accents / apostrophes / ponctuation / espaces
+const NF_INDEX = new WeakMap();
 function nf(obj, ...keys) {
+  if (!obj || typeof obj !== "object") return null;
+  let idx = NF_INDEX.get(obj);
+  if (!idx) {
+    idx = {};
+    for (const k of Object.keys(obj)) idx[keyish(k)] = obj[k];
+    NF_INDEX.set(obj, idx);
+  }
   for (const k of keys) {
-    const v = obj[k] ?? obj[k.toLowerCase()] ?? obj[k.toUpperCase()];
+    const v = idx[keyish(k)];
     if (v !== undefined && v !== null && v !== "") return v;
   }
   return null;
@@ -91,70 +200,78 @@ function nf(obj, ...keys) {
 
 function parseRelIds(val) {
   if (!val) return new Set();
-  return new Set(val.split(",").map(s => {
-    s = s.trim();
-    if (s.includes("notion.so/")) { const p = s.split("/"); s = p[p.length-1].split("?")[0]; }
-    return s.replace(/-/g,"");
-  }).filter(Boolean));
+  const values = Array.isArray(val) ? val : [val];
+  return new Set(values.flatMap(item => {
+    if (!item) return [];
+    if (typeof item === 'object' && item.id) return [String(item.id).replace(/-/g,"")];
+    const text = String(item).trim();
+    if (!text) return [];
+    return text.split(",").map(s => {
+      s = s.trim();
+      if (s.includes("notion.so/")) { const p = s.split("/"); s = p[p.length-1].split("?")[0]; }
+      return s.replace(/-/g,"");
+    }).filter(Boolean);
+  }));
 }
 
 function normId(id) { return (id||"").replace(/-/g,""); }
 
-// title vide => rendu via t('untitled') côté UI
 const parseFrictions = raw => raw.map((r,i) => ({
   _id: r._id || `frc-${i}`,
-  id: nf(r,"Waste ID","waste_id") || `WST-0${i+1}`,
-  title: nf(r,"Title","title","name") || "",
-  area: nf(r,"Execution Area","execution_area") || "—",
-  severity: nf(r,"Severity","severity") || "Medium",
-  impact: nf(r,"Impact Hypothesis Type","impact_hypothesis_type") || "—",
-  status: nf(r,"Status","status") || "Observed",
-  symptom: nf(r,"Observable Symptom","observable_symptom") || "",
-  relatedPDCA: parseRelIds(nf(r,"Related PDCA(s)")),
-  wasteType: nf(r,"Waste Type","waste_type") || "—",
+  id: nf(r,"Waste ID","ID gaspillage","ID du gaspillage","ID friction") || `WST-0${i+1}`,
+  title: nf(r,"Title","Titre","Nom","Titre du gaspillage","Friction") || "",
+  area: E('area', nf(r,"Execution Area","Zone d'exécution","Domaine d'exécution")) || "—",
+  severity: E('severity', nf(r,"Severity","Sévérité","Gravité")) || "Medium",
+  impact: E('impact', nf(r,"Impact Hypothesis Type","Type d'hypothèse d'impact","Type d'impact")) || "—",
+  status: E('status', nf(r,"Status","Statut")) || "Observed",
+  symptom: nf(r,"Observable Symptom","Symptôme observable","Symptôme observé") || "",
+  relatedPDCA: parseRelIds(nf(r,"Related PDCA(s)","PDCA lié(s)","PDCA liés","PDCA associé(s)")),
+  wasteType: E('waste', nf(r,"Waste Type","Type de gaspillage","Type de perte")) || "—",
 }));
 
 const parseHabits = raw => raw.map((r,i) => ({
   _id: r._id || `hab-${i}`,
-  id: nf(r,"PDCA ID","pdca_id") || `PDC-0${i+1}`,
-  title: nf(r,"Title","title","name") || "",
-  old: nf(r,"Old Habit","old_habit") || "—",
-  new: nf(r,"New Habit","new_habit") || "—",
-  cycle: nf(r,"Cycle / Iteration","cycle_iteration","cycle") || "—",
-  result: nf(r,"Result","result") || "Pending",
-  decision: nf(r,"Decision","decision") || "Pending",
-  owner: nf(r,"Owner","owner") || "—",
-  relatedAITask: parseRelIds(nf(r,"Related AI-Enabled Task")),
+  id: nf(r,"PDCA ID","ID PDCA") || `PDC-0${i+1}`,
+  title: nf(r,"Title","Titre","Nom") || "",
+  old: nf(r,"Old Habit","Ancienne habitude","Habitude actuelle") || "—",
+  new: nf(r,"New Habit","Nouvelle habitude") || "—",
+  cycle: nf(r,"Cycle / Iteration","Cycle / itération","Cycle","Itération") || "—",
+  result: E('result', nf(r,"Result","Résultat")) || "Pending",
+  decision: E('decision', nf(r,"Decision","Décision")) || "Pending",
+  owner: nf(r,"Owner","Propriétaire","Responsable") || "—",
+  relatedAITask: parseRelIds(nf(r,"Tâche activée par l'IA liée","Related AI-Enabled Task","Tâche activée par l'IA","Tâches activées par l'IA","Tâche IA liée")),
 }));
 
 const parseAITasks = raw => raw.map((r,i) => ({
   _id: r._id || `ait-${i}`,
-  id: nf(r,"Task ID","task_id") || `AIT-0${i+1}`,
-  title: nf(r,"Task Name","task_name","Title","title") || "",
-  capability: nf(r,"AI Capability Type","ai_capability_type") || "—",
-  freq: nf(r,"Frequency / Recurrence","frequency_recurrence","frequency") || "Ad hoc",
-  original: nf(r,"Original Work (As-Is)","original_work") || "—",
-  contribution: nf(r,"AI Contribution","ai_contribution") || "—",
-  humanRole: nf(r,"Human Role After AI","human_role_after_ai") || "—",
-  relatedValue: parseRelIds(nf(r,"Related Value")),
+  id: nf(r,"Task ID","ID de tâche","ID de la tâche") || `AIT-0${i+1}`,
+  title: nf(r,"Task Name","Nom de la tâche","Title","Titre") || "",
+  capability: E('capability', nf(r,"AI Capability Type","Type de capacité IA","Type de capacité d'IA")) || "—",
+  freq: E('frequency', nf(r,"Frequency / Recurrence","Fréquence / récurrence","Fréquence")) || "Ad hoc",
+  original: nf(r,"Original Work (As-Is)","Travail original (as-is)","Travail actuel") || "—",
+  contribution: nf(r,"AI Contribution","Contribution de l'IA") || "—",
+  humanRole: nf(r,"Human Role After AI","Rôle humain après l'IA") || "—",
+  relatedValue: parseRelIds(nf(r,"Related Value","Valeur liée","Valeur reliée","Valeurs liées")),
 }));
 
 const parseValues = raw => raw.map((r,i) => {
-  const fe = parseFloat(nf(r,"Financial Efficiency","financial_efficiency")||0);
-  const es = parseFloat(nf(r,"Execution Speed","execution_speed")||0);
-  const rg = parseFloat(nf(r,"Risk & Governance","risk_governance")||0);
-  const ha = parseFloat(nf(r,"Human & Adoption Impact","human_adoption_impact")||0);
+  const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+  const fe = num(nf(r,"Financial Efficiency","Efficacité financière","Efficience financière"));
+  const es = num(nf(r,"Execution Speed","Vitesse d'exécution"));
+  const rg = num(nf(r,"Risk & Governance","Risque & gouvernance","Risque et gouvernance"));
+  const ha = num(nf(r,"Human & Adoption Impact","Impact humain & adoption","Impact humain et adoption"));
   const dims = [fe,es,rg,ha].filter(v=>v>0);
   const niu = dims.length ? Math.round((dims.reduce((a,b)=>a+b,0)/dims.length)*10)/10 : 0;
   return {
     _id: r._id || `val-${i}`,
-    id: nf(r,"Value ID","value_id") || `VAL-0${i+1}`,
-    title: nf(r,"Title","title","name") || "",
-    area: nf(r,"Execution Area","execution_area") || "—",
-    type: nf(r,"Value Type","value_type") || "—",
-    estimate: nf(r,"Conservative Estimate","conservative_estimate") || "—",
-    niu, confidence: nf(r,"Confidence Level","confidence_level") || "—",
-    sponsor: nf(r,"Sponsor Validation Status","sponsor_validation_status") || "Pending",
+    id: nf(r,"Value ID","ID de valeur","ID de la valeur") || `VAL-0${i+1}`,
+    title: nf(r,"Title","Titre","Nom","Nom de la valeur") || "",
+    area: E('area', nf(r,"Execution Area","Zone d'exécution","Domaine d'exécution")) || "—",
+    type: E('valueType', nf(r,"Value Type","Type de valeur")) || "—",
+    estimate: nf(r,"Conservative Estimate","Estimation conservatrice","Estimation prudente") || "—",
+    niu,
+    confidence: E('confidence', nf(r,"Confidence Level","Niveau de confiance")) || "—",
+    sponsor: E('sponsor', nf(r,"Sponsor Validation Status","Statut de validation du sponsor","Validation du sponsor")) || "Pending",
     fe, es, rg, ha,
   };
 });
@@ -176,7 +293,6 @@ const SectionHeader = ({emoji,title,subtitle}) => <div style={{marginBottom:20}}
   {subtitle&&<p style={{margin:"4px 0 0",fontSize:13,color:COLORS.gray}}>{subtitle}</p>}
 </div>;
 
-// ── Badges métier (composants → re-render garanti au changement de langue) ──
 const GRAY = {c:COLORS.gray,bg:COLORS.lightGray,b:COLORS.borderGray};
 
 const SevBadge = ({value}) => {
@@ -239,7 +355,6 @@ const DecisionBadge = ({value}) => {
   return <Badge text={(m.p||"")+tEnum('decision',value)} color={m.c} bg={m.bg} border={m.b}/>;
 };
 
-// ── Fonctions NIU : pures, retournent des clés (jamais de texte) ──
 const NIU_BAND = n => n>=7?{labelKey:'niu_maximum',color:"#1D4ED8",bg:"#DBEAFE",border:"#93C5FD"}
                  : n>=5?{labelKey:'niu_anchored',color:"#15803D",bg:"#DCFCE7",border:"#86EFAC"}
                  : n>=3?{labelKey:'niu_building',color:"#C2410C",bg:"#FFEDD5",border:"#FDBA74"}
@@ -260,7 +375,6 @@ const NIUBar = ({score}) => {
   </div>;
 };
 
-// ── Pie Chart ──
 function PieChart({ data }) {
   const {t} = useI18n();
   const total = data.reduce((s,d)=>s+d.value,0);
@@ -423,6 +537,8 @@ function Dashboard() {
         fetchNotionData("aiTasks"),
         fetchNotionData("values"),
       ]);
+      // Debug : inspecte les colonnes et valeurs brutes depuis la console
+      window.__RAW = { frictions:rawF, habits:rawH, aiTasks:rawA, values:rawV };
       setData({ frictions:parseFrictions(rawF), habits:parseHabits(rawH), aiTasks:parseAITasks(rawA), values:parseValues(rawV) });
     } catch(e) { setError(e.message || "__UNKNOWN__"); }
     finally { setLoading(false); }
@@ -484,7 +600,6 @@ function Dashboard() {
       {active==="Pulse" && <div>
         <SectionHeader emoji="📊" title={t('section_pulse_title')} subtitle={t('section_pulse_subtitle')}/>
 
-        {/* KPIs */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,marginBottom:28}}>
           {[
             {labelKey:'kpi_frictions',value:frictions.length,sub:t('kpi_frictions_sub'),color:COLORS.orange},
@@ -500,7 +615,6 @@ function Dashboard() {
           )}
         </div>
 
-        {/* NIU Pie Charts */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
           <Card>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
@@ -520,7 +634,6 @@ function Dashboard() {
           </Card>
         </div>
 
-        {/* Value Chain */}
         <Card>
           <div style={{fontSize:13,fontWeight:700,color:COLORS.mid,marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}}>{t('value_chain_title')}</div>
           <div style={{fontSize:11,color:COLORS.light,marginBottom:12}}>{t('value_chain_subtitle')}</div>
@@ -584,7 +697,6 @@ function Dashboard() {
         return <div>
           <SectionHeader emoji="🔥" title={t('section_frictions_title')} subtitle={t('section_frictions_subtitle')}/>
 
-          {/* Legend */}
           <Card style={{marginBottom:20,padding:"12px 20px"}}>
             <div style={{display:"flex",gap:20,flexWrap:"wrap",alignItems:"center"}}>
               <span style={{fontSize:11,fontWeight:700,color:COLORS.light,textTransform:"uppercase",letterSpacing:0.5}}>{t('impact_legend')}</span>
@@ -756,7 +868,6 @@ function Dashboard() {
         return <div>
           <SectionHeader emoji="🔗" title={t('section_w2v_title')} subtitle={t('section_w2v_subtitle')}/>
 
-          {/* Summary tiles */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,marginBottom:28}}>
             {tiles.map(tile => {
               const band = tile.avgNiu!==null ? NIU_LABEL(tile.avgNiu) : {color:COLORS.light,labelKey:'no_data'};
@@ -792,7 +903,6 @@ function Dashboard() {
             })}
           </div>
 
-          {/* Detail rows */}
           {tiles.map(tile => (
             <Card key={tile.key} style={{marginBottom:16}}>
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,paddingBottom:12,borderBottom:`1px solid ${COLORS.borderGray}`}}>
@@ -806,7 +916,6 @@ function Dashboard() {
               </div>
 
               <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr auto 1fr auto 1fr",gap:8,alignItems:"start"}}>
-                {/* Frictions */}
                 <div>
                   <div style={{fontSize:10,fontWeight:700,color:COLORS.orange,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{"🔥 " + t('frictions_label') + ` (${tile.wtFrictions.length})`}</div>
                   {tile.wtFrictions.length===0
@@ -820,7 +929,6 @@ function Dashboard() {
                 </div>
                 <div style={{color:COLORS.light,fontSize:16,paddingTop:24}}>→</div>
 
-                {/* Habits */}
                 <div>
                   <div style={{fontSize:10,fontWeight:700,color:COLORS.green,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{"🔁 " + t('habits_label') + ` (${tile.linkedHabits.length})`}</div>
                   {tile.linkedHabits.length===0
@@ -834,7 +942,6 @@ function Dashboard() {
                 </div>
                 <div style={{color:COLORS.light,fontSize:16,paddingTop:24}}>→</div>
 
-                {/* AI Tasks */}
                 <div>
                   <div style={{fontSize:10,fontWeight:700,color:COLORS.blue,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{"🤖 " + t('ai_tasks_label') + ` (${tile.linkedAITasks.length})`}</div>
                   {tile.linkedAITasks.length===0
@@ -848,7 +955,6 @@ function Dashboard() {
                 </div>
                 <div style={{color:COLORS.light,fontSize:16,paddingTop:24}}>→</div>
 
-                {/* Values */}
                 <div>
                   <div style={{fontSize:10,fontWeight:700,color:COLORS.purple,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{"💰 " + t('value_label') + ` (${tile.linkedValues.length})`}</div>
                   {tile.linkedValues.length===0
@@ -923,8 +1029,6 @@ function App() {
   });
 
   const i18n = React.useMemo(() => makeI18n(lang), [lang]);
-
-  // mutation synchrone AVANT le setState : plus de render avec une langue périmée
   const setLang = React.useCallback(l => { window.CURRENT_LANG = l; setLangState(l); }, []);
 
   React.useEffect(() => {

@@ -9,10 +9,10 @@ export default async function handler(req, res) {
   const TOKEN = process.env.NOTION_TOKEN;
 
   const DB_IDS = {
-    frictions: "5b5b113cdf9640a9929422e6dc93e704",
-    habits:    "6ef14076ca6e44f5b21d1f2e8bfe6d8f",
-    aiTasks:   "cf997cf7968a40ee900e3977e663f84f",
-    values:    "7a0dc4296a1a42e5a0f235b3082d8cf7",
+    frictions: "331a5b6b36ea810a8cc2c6fda93ed29e",
+    habits:    "331a5b6b36ea814d95fee69df77a211e",
+    aiTasks:   "331a5b6b36ea819dbf82dd8ecc931ec2",
+    values:    "331a5b6b36ea8101b861c9db4a18cd56",
   };
 
   const dbId = DB_IDS[source];
