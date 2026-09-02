@@ -10,24 +10,98 @@
   <script src="translations.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F8FAFC; }
+    html { background: #F8FAFC; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: transparent; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem('nyll_theme') === 'dark') document.documentElement.style.background = '#0F1729';
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
 
 const COLORS = {
-  blue:"#2563EB", lightBlue:"#EFF6FF", borderBlue:"#BFDBFE",
-  green:"#16A34A", lightGreen:"#F0FDF4", borderGreen:"#BBF7D0",
-  orange:"#EA580C", lightOrange:"#FFF7ED", borderOrange:"#FED7AA",
-  yellow:"#CA8A04", lightYellow:"#FEFCE8", borderYellow:"#FEF08A",
-  purple:"#7C3AED", lightPurple:"#F5F3FF", borderPurple:"#DDD6FE",
-  red:"#DC2626", lightRed:"#FEF2F2", borderRed:"#FECACA",
-  gray:"#6B7280", lightGray:"#F9FAFB", borderGray:"#E5E7EB",
-  dark:"#111827", mid:"#374151", light:"#9CA3AF",
+  blue:"", lightBlue:"", borderBlue:"",
+  green:"", lightGreen:"", borderGreen:"",
+  orange:"", lightOrange:"", borderOrange:"",
+  yellow:"", lightYellow:"", borderYellow:"",
+  purple:"", lightPurple:"", borderPurple:"",
+  red:"", lightRed:"", borderRed:"",
+  gray:"", lightGray:"", borderGray:"",
+  dark:"", mid:"", light:"", surface:"", pageBg:"", onAccent:"",
 };
+
+const THEMES = {
+  light: {
+    blue:"#2563EB", lightBlue:"#EFF6FF", borderBlue:"#BFDBFE",
+    green:"#16A34A", lightGreen:"#F0FDF4", borderGreen:"#BBF7D0",
+    orange:"#EA580C", lightOrange:"#FFF7ED", borderOrange:"#FED7AA",
+    yellow:"#CA8A04", lightYellow:"#FEFCE8", borderYellow:"#FEF08A",
+    purple:"#7C3AED", lightPurple:"#F5F3FF", borderPurple:"#DDD6FE",
+    red:"#DC2626", lightRed:"#FEF2F2", borderRed:"#FECACA",
+    gray:"#6B7280", lightGray:"#F9FAFB", borderGray:"#E5E7EB",
+    dark:"#111827", mid:"#374151", light:"#9CA3AF",
+    surface:"#FFFFFF", pageBg:"#F8FAFC", onAccent:"#FFFFFF",
+  },
+  dark: {
+    blue:"#60A5FA", lightBlue:"#16294A", borderBlue:"#27467F",
+    green:"#4ADE80", lightGreen:"#12301F", borderGreen:"#1F5334",
+    orange:"#FB923C", lightOrange:"#33200F", borderOrange:"#7C3A12",
+    yellow:"#FACC15", lightYellow:"#332B0A", borderYellow:"#6B5A11",
+    purple:"#A78BFA", lightPurple:"#241C46", borderPurple:"#453089",
+    red:"#F87171", lightRed:"#38161A", borderRed:"#7A2630",
+    gray:"#94A3B8", lightGray:"#151E2E", borderGray:"#2A3448",
+    dark:"#F1F5F9", mid:"#CBD5E1", light:"#8595AD",
+    surface:"#1A2234", pageBg:"#0F1729", onAccent:"#0F1729",
+  },
+};
+
+const SCALE = { niu:[], waste:[] };
+
+const SCALES = {
+  light: {
+    niu: [
+      { color:"#A16207", bg:"#FEF9C3", border:"#FDE047", cell:"#FFFDE7" },
+      { color:"#C2410C", bg:"#FFEDD5", border:"#FDBA74", cell:"#FFF3E0" },
+      { color:"#15803D", bg:"#DCFCE7", border:"#86EFAC", cell:"#F0FDF4" },
+      { color:"#1D4ED8", bg:"#DBEAFE", border:"#93C5FD", cell:"#EFF6FF" },
+    ],
+    waste: [
+      { color:"#2563EB", bg:"#EFF6FF", border:"#BFDBFE" },
+      { color:"#7C3AED", bg:"#F5F3FF", border:"#DDD6FE" },
+      { color:"#DC2626", bg:"#FEF2F2", border:"#FECACA" },
+      { color:"#CA8A04", bg:"#FEFCE8", border:"#FEF08A" },
+    ],
+  },
+  dark: {
+    niu: [
+      { color:"#FACC15", bg:"#332B0A", border:"#6B5A11", cell:"#241E07" },
+      { color:"#FB923C", bg:"#33200F", border:"#7C3A12", cell:"#26180B" },
+      { color:"#4ADE80", bg:"#12301F", border:"#1F5334", cell:"#0E2418" },
+      { color:"#60A5FA", bg:"#16294A", border:"#27467F", cell:"#111F38" },
+    ],
+    waste: [
+      { color:"#60A5FA", bg:"#16294A", border:"#27467F" },
+      { color:"#A78BFA", bg:"#241C46", border:"#453089" },
+      { color:"#F87171", bg:"#38161A", border:"#7A2630" },
+      { color:"#FACC15", bg:"#332B0A", border:"#6B5A11" },
+    ],
+  },
+};
+
+const THEME_INIT = (() => {
+  try { const s = localStorage.getItem('nyll_theme'); if (s === 'dark' || s === 'light') return s; } catch (e) {}
+  return 'light';
+})();
+
+const applyTheme = tn => { Object.assign(COLORS, THEMES[tn]); Object.assign(SCALE, SCALES[tn]); };
+applyTheme(THEME_INIT);
 
 const PIE_COLORS = ["#2563EB","#16A34A","#EA580C","#7C3AED"];
 const DIM_LABEL_KEYS = ['dim_fe','dim_es','dim_rg','dim_ha'];
@@ -280,10 +354,10 @@ const parseValues = raw => raw.map((r,i) => {
 // Primitives
 // ══════════════════════════════════════════════════════════════
 const Badge = ({text,color,bg,border}) => (
-  <span style={{background:bg||"#F3F4F6",color:color||COLORS.gray,border:`1px solid ${border||"#E5E7EB"}`,borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{text}</span>
+  <span style={{background:bg||COLORS.lightGray,color:color||COLORS.gray,border:`1px solid ${border||COLORS.borderGray}`,borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{text}</span>
 );
 
-const Card = ({children,style}) => <div style={{background:"#fff",border:`1px solid ${COLORS.borderGray}`,borderRadius:10,padding:20,...style}}>{children}</div>;
+const Card = ({children,style}) => <div style={{background:COLORS.surface,border:`1px solid ${COLORS.borderGray}`,borderRadius:10,padding:20,...style}}>{children}</div>;
 
 const SectionHeader = ({emoji,title,subtitle}) => <div style={{marginBottom:20}}>
   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
@@ -293,15 +367,13 @@ const SectionHeader = ({emoji,title,subtitle}) => <div style={{marginBottom:20}}
   {subtitle&&<p style={{margin:"4px 0 0",fontSize:13,color:COLORS.gray}}>{subtitle}</p>}
 </div>;
 
-const GRAY = {c:COLORS.gray,bg:COLORS.lightGray,b:COLORS.borderGray};
-
 const SevBadge = ({value}) => {
   const {tEnum} = useI18n();
   const m = {
     High:   {c:COLORS.red,    bg:COLORS.lightRed,    b:COLORS.borderRed},
     Medium: {c:COLORS.yellow, bg:COLORS.lightYellow, b:COLORS.borderYellow},
     Low:    {c:COLORS.green,  bg:COLORS.lightGreen,  b:COLORS.borderGreen},
-  }[value] || GRAY;
+  }[value] || {c:COLORS.gray,bg:COLORS.lightGray,b:COLORS.borderGray};
   return <Badge text={tEnum('severity',value)} color={m.c} bg={m.bg} border={m.b}/>;
 };
 
@@ -312,7 +384,7 @@ const StatusBadge = ({value}) => {
     Addressed:  {c:COLORS.blue,   bg:COLORS.lightBlue,   b:COLORS.borderBlue},
     Resolved:   {c:COLORS.green,  bg:COLORS.lightGreen,  b:COLORS.borderGreen},
     Monitoring: {c:COLORS.purple, bg:COLORS.lightPurple, b:COLORS.borderPurple},
-  }[value] || GRAY;
+  }[value] || {c:COLORS.gray,bg:COLORS.lightGray,b:COLORS.borderGray};
   return <Badge text={tEnum('status',value)} color={m.c} bg={m.bg} border={m.b}/>;
 };
 
@@ -322,7 +394,7 @@ const ResultBadge = ({value}) => {
     "Observed":     {c:COLORS.green,  bg:COLORS.lightGreen,  b:COLORS.borderGreen,  p:"✓ "},
     "Partial":      {c:COLORS.orange, bg:COLORS.lightOrange, b:COLORS.borderOrange, p:"~ "},
     "Not observed": {c:COLORS.red,    bg:COLORS.lightRed,    b:COLORS.borderRed,    p:"✗ "},
-  }[value] || {...GRAY, p:""};
+  }[value] || {c:COLORS.gray,bg:COLORS.lightGray,b:COLORS.borderGray,p:""};
   return <Badge text={(m.p||"")+tEnum('result',value)} color={m.c} bg={m.bg} border={m.b}/>;
 };
 
@@ -331,7 +403,7 @@ const FreqBadge = ({value}) => {
   const m = {
     Weekly: {c:COLORS.blue,   bg:COLORS.lightBlue,   b:COLORS.borderBlue},
     Daily:  {c:COLORS.purple, bg:COLORS.lightPurple, b:COLORS.borderPurple},
-  }[value] || GRAY;
+  }[value] || {c:COLORS.gray,bg:COLORS.lightGray,b:COLORS.borderGray};
   return <Badge text={tEnum('frequency',value)} color={m.c} bg={m.bg} border={m.b}/>;
 };
 
@@ -342,7 +414,7 @@ const SponsorBadge = ({value}) => {
     "In Review":      {c:COLORS.blue,   bg:COLORS.lightBlue,   b:COLORS.borderBlue},
     "On Hold":        {c:COLORS.red,    bg:COLORS.lightRed,    b:COLORS.borderRed},
     "Needs revision": {c:COLORS.orange, bg:COLORS.lightOrange, b:COLORS.borderOrange},
-  }[value] || GRAY;
+  }[value] || {c:COLORS.gray,bg:COLORS.lightGray,b:COLORS.borderGray};
   return <Badge text={tEnum('sponsor',value)} color={m.c} bg={m.bg} border={m.b}/>;
 };
 
@@ -351,14 +423,15 @@ const DecisionBadge = ({value}) => {
   const m = {
     Keep:   {c:COLORS.green,  bg:COLORS.lightGreen,  b:COLORS.borderGreen,  p:"✓ "},
     Adjust: {c:COLORS.orange, bg:COLORS.lightOrange, b:COLORS.borderOrange, p:""},
-  }[value] || {...GRAY, p:""};
+  }[value] || {c:COLORS.gray,bg:COLORS.lightGray,b:COLORS.borderGray,p:""};
   return <Badge text={(m.p||"")+tEnum('decision',value)} color={m.c} bg={m.bg} border={m.b}/>;
 };
 
-const NIU_BAND = n => n>=7?{labelKey:'niu_maximum',color:"#1D4ED8",bg:"#DBEAFE",border:"#93C5FD"}
-                 : n>=5?{labelKey:'niu_anchored',color:"#15803D",bg:"#DCFCE7",border:"#86EFAC"}
-                 : n>=3?{labelKey:'niu_building',color:"#C2410C",bg:"#FFEDD5",border:"#FDBA74"}
-                 :      {labelKey:'niu_emerging',color:"#A16207",bg:"#FEF9C3",border:"#FDE047"};
+const NIU_BAND = n => {
+  const i = n>=7 ? 3 : n>=5 ? 2 : n>=3 ? 1 : 0;
+  const keys = ['niu_emerging','niu_building','niu_anchored','niu_maximum'];
+  return { labelKey:keys[i], ...SCALE.niu[i] };
+};
 
 const NIU_LABEL = s => s>=8?{labelKey:'niu_label_maximum_signal',color:COLORS.blue}
                   : s>=6?{labelKey:'niu_label_anchored_value',color:COLORS.green}
@@ -368,7 +441,7 @@ const NIU_LABEL = s => s>=8?{labelKey:'niu_label_maximum_signal',color:COLORS.bl
 const NIUBar = ({score}) => {
   const {color}=NIU_LABEL(score);
   return <div style={{display:"flex",alignItems:"center",gap:8}}>
-    <div style={{flex:1,height:5,background:"#E5E7EB",borderRadius:3,overflow:"hidden"}}>
+    <div style={{flex:1,height:5,background:COLORS.borderGray,borderRadius:3,overflow:"hidden"}}>
       <div style={{width:`${(score/8)*100}%`,height:"100%",background:color,borderRadius:3}}/>
     </div>
     <span style={{fontSize:11,fontWeight:700,color,minWidth:24}}>{score}</span>
@@ -394,7 +467,7 @@ function PieChart({ data }) {
   return (
     <div style={{display:"flex",alignItems:"center",gap:28,flexWrap:"wrap"}}>
       <svg width={size} height={size} style={{flexShrink:0}}>
-        {slices.map((s,i)=><path key={i} d={s.path} fill={s.color} stroke="#fff" strokeWidth={2}/>)}
+        {slices.map((s,i)=><path key={i} d={s.path} fill={s.color} stroke={COLORS.surface} strokeWidth={2}/>)}
         <text x={cx} y={cy-6} textAnchor="middle" fontSize={13} fontWeight={700} fill={COLORS.dark}>{total.toFixed(1)}</text>
         <text x={cx} y={cy+10} textAnchor="middle" fontSize={9} fill={COLORS.light}>{t('niu_total')}</text>
       </svg>
@@ -422,18 +495,12 @@ const NIU_COLS = [
   { labelKey:"niu_maximum",  range:"7–8", min:7,  max:8    },
 ];
 const CONF_ROWS = ["High","Medium","Low"];
-const COL_STYLE = [
-  { hdr:{color:"#A16207",bg:"#FEF9C3",border:"#FDE047"}, cell:"#FFFDE7" },
-  { hdr:{color:"#C2410C",bg:"#FFEDD5",border:"#FDBA74"}, cell:"#FFF3E0" },
-  { hdr:{color:"#15803D",bg:"#DCFCE7",border:"#86EFAC"}, cell:"#F0FDF4" },
-  { hdr:{color:"#1D4ED8",bg:"#DBEAFE",border:"#93C5FD"}, cell:"#EFF6FF" },
-];
 
 function ValueCard({ v }) {
   const {t,tEnum} = useI18n();
   const band = NIU_BAND(v.niu);
   return (
-    <div style={{background:"#fff",border:`1.5px solid ${band.border}`,borderRadius:8,padding:"10px 12px",display:"flex",flexDirection:"column",gap:6,boxShadow:"0 1px 3px rgba(0,0,0,0.06)",minWidth:0}}>
+    <div style={{background:COLORS.surface,border:`1.5px solid ${band.border}`,borderRadius:8,padding:"10px 12px",display:"flex",flexDirection:"column",gap:6,boxShadow:"0 1px 3px rgba(0,0,0,0.06)",minWidth:0}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:4}}>
         <span style={{fontSize:10,fontWeight:700,color:COLORS.light,letterSpacing:0.5}}>{v.id}</span>
         <SponsorBadge value={v.sponsor}/>
@@ -462,9 +529,9 @@ function ValueHeatmap({ values }) {
       <div style={{display:"grid",gridTemplateColumns:"80px repeat(4,1fr)",gap:8,marginBottom:8,paddingLeft:4}}>
         <div/>
         {NIU_COLS.map((col,i)=>(
-          <div key={col.labelKey} style={{textAlign:"center",padding:"6px 8px",borderRadius:6,background:COL_STYLE[i].hdr.bg,border:`1px solid ${COL_STYLE[i].hdr.border}`}}>
-            <div style={{fontSize:12,fontWeight:700,color:COL_STYLE[i].hdr.color}}>{t(col.labelKey)}</div>
-            <div style={{fontSize:10,color:COL_STYLE[i].hdr.color,opacity:0.7}}>NIU {col.range}</div>
+          <div key={col.labelKey} style={{textAlign:"center",padding:"6px 8px",borderRadius:6,background:SCALE.niu[i].bg,border:`1px solid ${SCALE.niu[i].border}`}}>
+            <div style={{fontSize:12,fontWeight:700,color:SCALE.niu[i].color}}>{t(col.labelKey)}</div>
+            <div style={{fontSize:10,color:SCALE.niu[i].color,opacity:0.7}}>NIU {col.range}</div>
           </div>
         ))}
       </div>
@@ -481,7 +548,7 @@ function ValueHeatmap({ values }) {
             {NIU_COLS.map((col,ci)=>{
               const cards=rowValues.filter(v=>v.niu>=col.min&&v.niu<=col.max);
               return (
-                <div key={col.labelKey} style={{background:cards.length?COL_STYLE[ci].cell:"#F9FAFB",border:`1px dashed ${cards.length?COL_STYLE[ci].hdr.border:COLORS.borderGray}`,borderRadius:8,padding:cards.length?8:0,minHeight:60,display:"flex",flexDirection:"column",gap:8}}>
+                <div key={col.labelKey} style={{background:cards.length?SCALE.niu[ci].cell:COLORS.lightGray,border:`1px dashed ${cards.length?SCALE.niu[ci].border:COLORS.borderGray}`,borderRadius:8,padding:cards.length?8:0,minHeight:60,display:"flex",flexDirection:"column",gap:8}}>
                   {cards.length===0
                     ?<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:60,color:COLORS.borderGray,fontSize:18}}>—</div>
                     :cards.map(v=><ValueCard key={v.id} v={v}/>)
@@ -522,7 +589,7 @@ const NAV = [
 // Dashboard
 // ══════════════════════════════════════════════════════════════
 function Dashboard() {
-  const {t,tEnum,lang,setLang} = useI18n();
+  const {t,tEnum,lang,setLang,theme,setTheme} = useI18n();
   const [active, setActive] = React.useState("Pulse");
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
@@ -550,10 +617,10 @@ function Dashboard() {
                   : error === "__UNKNOWN__" ? t('unknown_error')
                   : error;
 
-  const navBtn = ({key,labelKey}) => <button key={key} onClick={()=>setActive(key)} style={{padding:"8px 14px",borderRadius:6,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:active===key?COLORS.blue:"transparent",color:active===key?"#fff":COLORS.gray,whiteSpace:"nowrap"}}>{t(labelKey)}</button>;
+  const navBtn = ({key,labelKey}) => <button key={key} onClick={()=>setActive(key)} style={{padding:"8px 14px",borderRadius:6,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:active===key?COLORS.blue:"transparent",color:active===key?COLORS.onAccent:COLORS.gray,whiteSpace:"nowrap"}}>{t(labelKey)}</button>;
 
   const Header = () => <div>
-    <div style={{background:"#fff",borderBottom:`1px solid ${COLORS.borderGray}`,padding:"16px 28px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+    <div style={{background:COLORS.surface,borderBottom:`1px solid ${COLORS.borderGray}`,padding:"16px 28px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
       <div>
         <div style={{fontSize:11,fontWeight:700,color:COLORS.blue,letterSpacing:1,textTransform:"uppercase",marginBottom:2}}>{t('branding')}</div>
         <h1 style={{margin:0,fontSize:20,fontWeight:800,color:COLORS.dark}}>{t('page_heading')}</h1>
@@ -583,8 +650,8 @@ function Dashboard() {
               }}>
               <div style={{
                 position:"absolute", top:2, left:2, width:W, height:H,
-                borderRadius:999, background:"#fff",
-                boxShadow:"0 1px 3px rgba(0,0,0,0.14)",
+                borderRadius:999, background:COLORS.surface,
+                boxShadow:"0 1px 3px rgba(0,0,0,0.25)",
                 transform:`translateX(${i*W}px)`,
                 transition:"transform 180ms cubic-bezier(.4,0,.2,1)",
               }}/>
@@ -600,13 +667,52 @@ function Dashboard() {
             </div>
           );
         })()}
+        {(() => {
+          const MODES = ['light','dark'], W = 30, H = 26;
+          const i = MODES.indexOf(theme);
+          const toggle = () => setTheme(MODES[(i + 1) % MODES.length]);
+          return (
+            <div
+              onClick={toggle}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+              role="switch"
+              aria-checked={theme === 'dark'}
+              aria-label="Thème / Theme"
+              tabIndex={0}
+              title={theme === 'light' ? 'Mode sombre' : 'Mode clair'}
+              style={{
+                position:"relative", display:"flex", flexShrink:0,
+                width:W*2+4, height:H+4, padding:2,
+                background:COLORS.lightGray,
+                border:`1px solid ${COLORS.borderGray}`,
+                borderRadius:999, cursor:"pointer", userSelect:"none",
+              }}>
+              <div style={{
+                position:"absolute", top:2, left:2, width:W, height:H,
+                borderRadius:999, background:COLORS.surface,
+                boxShadow:"0 1px 3px rgba(0,0,0,0.25)",
+                transform:`translateX(${i*W}px)`,
+                transition:"transform 180ms cubic-bezier(.4,0,.2,1)",
+              }}/>
+              {MODES.map(m => (
+                <div key={m} style={{
+                  position:"relative", width:W, height:H,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:13,
+                  color: theme === m ? (m === 'dark' ? COLORS.purple : COLORS.yellow) : COLORS.light,
+                  transition:"color 180ms",
+                }}>{m === 'light' ? '☀' : '☾'}</div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
     </div>
-    <div style={{background:"#fff",borderBottom:`1px solid ${COLORS.borderGray}`,padding:"6px 24px",display:"flex",gap:4,overflowX:"auto"}}>{NAV.map(navBtn)}</div>
+    <div style={{background:COLORS.surface,borderBottom:`1px solid ${COLORS.borderGray}`,padding:"6px 24px",display:"flex",gap:4,overflowX:"auto"}}>{NAV.map(navBtn)}</div>
   </div>;
 
   if (loading&&!data) return <div><Header/><div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:60,gap:16}}><div style={{width:36,height:36,border:`3px solid ${COLORS.borderBlue}`,borderTop:`3px solid ${COLORS.blue}`,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/><div style={{color:COLORS.gray,fontSize:13}}>{t('loading_message')}</div></div></div>;
-  if (error&&!data) return <div><Header/><div style={{padding:28}}><Card style={{borderLeft:`4px solid ${COLORS.red}`,background:COLORS.lightRed}}><div style={{color:COLORS.red,fontWeight:600,marginBottom:6}}>{t('unable_load')}</div><div style={{color:COLORS.mid,fontSize:13,marginBottom:12}}>{errorText}</div><button onClick={loadData} style={{background:COLORS.red,color:"#fff",border:"none",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontWeight:600,fontSize:13}}>{t('retry')}</button></Card></div></div>;
+  if (error&&!data) return <div><Header/><div style={{padding:28}}><Card style={{borderLeft:`4px solid ${COLORS.red}`,background:COLORS.lightRed}}><div style={{color:COLORS.red,fontWeight:600,marginBottom:6}}>{t('unable_load')}</div><div style={{color:COLORS.mid,fontSize:13,marginBottom:12}}>{errorText}</div><button onClick={loadData} style={{background:COLORS.red,color:COLORS.onAccent,border:"none",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontWeight:600,fontSize:13}}>{t('retry')}</button></Card></div></div>;
 
   const {frictions,habits,aiTasks,values} = data;
   const habitsActive  = habits.filter(h=>h.decision==="Keep"||h.decision==="Adjust");
@@ -678,7 +784,7 @@ function Dashboard() {
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             {chainRows.map((row,i)=>(
-              <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1.4fr",gap:8,padding:"10px 12px",background:i%2===0?"#F8FAFC":"#fff",borderRadius:6,border:`1px solid ${COLORS.borderGray}`,alignItems:"center"}}>
+              <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1.4fr",gap:8,padding:"10px 12px",background:i%2===0?COLORS.lightGray:COLORS.surface,borderRadius:6,border:`1px solid ${COLORS.borderGray}`,alignItems:"center"}}>
                 <div style={{fontSize:12,color:COLORS.mid}}>{row.frictions.length?row.frictions.map(titleOf).join(", "):"—"}</div>
                 <div style={{fontSize:12,color:COLORS.mid}}>{row.habits.length?row.habits.map(titleOf).join(", "):"—"}</div>
                 <div style={{fontSize:12,color:COLORS.mid}}>{row.aiTasks.length?row.aiTasks.map(titleOf).join(", "):"—"}</div>
@@ -696,10 +802,10 @@ function Dashboard() {
       {/* ══ FRICTIONS — HEATMAP ══ */}
       {active==="Frictions" && (()=>{
         const WASTE_COLS = [
-          { key:"Overhead",    color:"#2563EB", bg:"#EFF6FF", border:"#BFDBFE" },
-          { key:"Idle Time",   color:"#7C3AED", bg:"#F5F3FF", border:"#DDD6FE" },
-          { key:"Rework",      color:"#DC2626", bg:"#FEF2F2", border:"#FECACA" },
-          { key:"Scope Creep", color:"#CA8A04", bg:"#FEFCE8", border:"#FEF08A" },
+          { key:"Overhead",    ...SCALE.waste[0] },
+          { key:"Idle Time",   ...SCALE.waste[1] },
+          { key:"Rework",      ...SCALE.waste[2] },
+          { key:"Scope Creep", ...SCALE.waste[3] },
         ];
         const SEV_ROWS = ["High","Medium","Low"];
         const SEV_STYLE = {
@@ -715,7 +821,7 @@ function Dashboard() {
         const wasteKeys = new Set(WASTE_COLS.map(c=>c.key));
 
         const FrictionCard = ({f}) => (
-          <div style={{background:"#fff",border:`1.5px solid ${SEV_STYLE[f.severity]?.border||COLORS.borderGray}`,borderRadius:8,padding:"10px 12px",display:"flex",flexDirection:"column",gap:5,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+          <div style={{background:COLORS.surface,border:`1.5px solid ${SEV_STYLE[f.severity]?.border||COLORS.borderGray}`,borderRadius:8,padding:"10px 12px",display:"flex",flexDirection:"column",gap:5,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:4}}>
               <span style={{fontSize:10,fontWeight:700,color:COLORS.light,letterSpacing:0.5}}>{f.id}</span>
               <StatusBadge value={f.status}/>
@@ -766,7 +872,7 @@ function Dashboard() {
                     {WASTE_COLS.map(col=>{
                       const cards=rowFrictions.filter(f=>f.wasteType===col.key);
                       return (
-                        <div key={col.key} style={{background:cards.length?col.bg:"#F9FAFB",border:`1px dashed ${cards.length?col.border:COLORS.borderGray}`,borderRadius:8,padding:cards.length?8:0,minHeight:60,display:"flex",flexDirection:"column",gap:8}}>
+                        <div key={col.key} style={{background:cards.length?col.bg:COLORS.lightGray,border:`1px dashed ${cards.length?col.border:COLORS.borderGray}`,borderRadius:8,padding:cards.length?8:0,minHeight:60,display:"flex",flexDirection:"column",gap:8}}>
                           {cards.length===0
                             ?<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:60,color:COLORS.borderGray,fontSize:18}}>—</div>
                             :cards.map(f=><FrictionCard key={f.id} f={f}/>)
@@ -861,8 +967,8 @@ function Dashboard() {
             <span style={{fontSize:11,fontWeight:700,color:COLORS.light,textTransform:"uppercase",letterSpacing:0.5}}>{t('niu_score_label')}</span>
             {NIU_COLS.map((col,i)=>(
               <div key={col.labelKey} style={{display:"flex",alignItems:"center",gap:6}}>
-                <div style={{width:10,height:10,borderRadius:2,background:COL_STYLE[i].hdr.color}}/>
-                <span style={{fontSize:12,color:COLORS.dark}}><strong style={{color:COL_STYLE[i].hdr.color}}>{col.range}</strong> — {t(col.labelKey)}</span>
+                <div style={{width:10,height:10,borderRadius:2,background:SCALE.niu[i].color}}/>
+                <span style={{fontSize:12,color:COLORS.dark}}><strong style={{color:SCALE.niu[i].color}}>{col.range}</strong> — {t(col.labelKey)}</span>
               </div>
             ))}
           </div>
@@ -876,10 +982,10 @@ function Dashboard() {
       {/* ══ WASTE-TO-VALUE ══ */}
       {active==="W2V" && (()=>{
         const WASTE_TYPES = [
-          { key:"Overhead",    color:"#2563EB", bg:"#EFF6FF", border:"#BFDBFE", emoji:"⚙️" },
-          { key:"Idle Time",   color:"#7C3AED", bg:"#F5F3FF", border:"#DDD6FE", emoji:"⏳" },
-          { key:"Rework",      color:"#DC2626", bg:"#FEF2F2", border:"#FECACA", emoji:"🔁" },
-          { key:"Scope Creep", color:"#CA8A04", bg:"#FEFCE8", border:"#FEF08A", emoji:"📐" },
+          { key:"Overhead",    emoji:"⚙️", ...SCALE.waste[0] },
+          { key:"Idle Time",   emoji:"⏳", ...SCALE.waste[1] },
+          { key:"Rework",      emoji:"🔁", ...SCALE.waste[2] },
+          { key:"Scope Creep", emoji:"📐", ...SCALE.waste[3] },
         ];
 
         const tiles = WASTE_TYPES.map(wt => {
@@ -1061,9 +1167,11 @@ function App() {
     try { const s = localStorage.getItem('nyll_lang'); if (s && window.TRANSLATIONS[s]) return s; } catch(e) {}
     return window.CURRENT_LANG || window.I18N_DEFAULT_LANG || 'fr';
   });
+  const [theme, setThemeState] = React.useState(THEME_INIT);
 
   const i18n = React.useMemo(() => makeI18n(lang), [lang]);
   const setLang = React.useCallback(l => { window.CURRENT_LANG = l; setLangState(l); }, []);
+  const setTheme = React.useCallback(tn => { applyTheme(tn); setThemeState(tn); }, []);
 
   React.useEffect(() => {
     window.CURRENT_LANG = lang;
@@ -1072,7 +1180,12 @@ function App() {
     document.title = i18n.t('page_title');
   }, [lang, i18n]);
 
-  const ctx = React.useMemo(() => ({...i18n, setLang}), [i18n, setLang]);
+  React.useEffect(() => {
+    document.documentElement.style.background = COLORS.pageBg;
+    try { localStorage.setItem('nyll_theme', theme); } catch(e) {}
+  }, [theme]);
+
+  const ctx = React.useMemo(() => ({...i18n, setLang, theme, setTheme}), [i18n, setLang, theme, setTheme]);
   return <I18nCtx.Provider value={ctx}><Dashboard/></I18nCtx.Provider>;
 }
 
