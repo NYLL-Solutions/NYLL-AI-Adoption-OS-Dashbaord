@@ -159,7 +159,7 @@
     nav_habits: '🔁 Habitudes',
     nav_ai_tasks: '🤖 Tâches IA',
     nav_value: '💰 Valeur',
-    nav_w2v: '🔗 Gaspillage → Valeur',
+    nav_w2v: '🔗 De la friction à la valeur',
     nav_pipeline: '🔮 Pipeline',
 
     section_pulse_title: 'Indicateurs du programme',
