@@ -8,6 +8,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
   <script src="translations.js"></script>
+  <script type="module">
+  // Pont ESM → global : rend notion.config.js lisible par le script Babel
+  window.__CLIENT__ = import("./notion.config.js")
+    .then(m => m.CLIENT || {})
+    .catch(() => ({}));
+</script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { background: #F8FAFC; }
@@ -25,6 +31,17 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
+
+function useClientName() {
+  const [nom, setNom] = React.useState("");
+  React.useEffect(() => {
+    let vivant = true;
+    (window.__CLIENT__ || Promise.resolve({}))
+      .then(c => { if (vivant) setNom(c.nom || ""); });
+    return () => { vivant = false; };
+  }, []);
+  return nom;
+}  
 
 const COLORS = {
   blue:"", lightBlue:"", borderBlue:"",
@@ -251,7 +268,7 @@ async function fetchNotionData(sourceKey) {
   });
   const json = await res.json();
   if (!json.data) throw new Error(json.error || "__NO_DATA__");
-  return json.data;
+  return json;
 }
 
 // nf : cherche une colonne par n'importe lequel de ses alias, en ignorant
@@ -589,21 +606,24 @@ const NAV = [
 // Dashboard
 // ══════════════════════════════════════════════════════════════
 function Dashboard() {
+  const [clientNom, setClientNom] = React.useState("");
   const {t,tEnum,lang,setLang,theme,setTheme} = useI18n();
   const [active, setActive] = React.useState("Pulse");
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
 
-  const loadData = React.useCallback(async () => {
+    const loadData = React.useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [rawF,rawH,rawA,rawV] = await Promise.all([
+      const [resF,resH,resA,resV] = await Promise.all([
         fetchNotionData("frictions"),
         fetchNotionData("habits"),
         fetchNotionData("aiTasks"),
         fetchNotionData("values"),
       ]);
+      const rawF = resF.data, rawH = resH.data, rawA = resA.data, rawV = resV.data;
+      setClientNom(resF.clientName || "");
       // Debug : inspecte les colonnes et valeurs brutes depuis la console
       window.__RAW = { frictions:rawF, habits:rawH, aiTasks:rawA, values:rawV };
       setData({ frictions:parseFrictions(rawF), habits:parseHabits(rawH), aiTasks:parseAITasks(rawA), values:parseValues(rawV) });
@@ -623,7 +643,8 @@ function Dashboard() {
     <div style={{background:COLORS.surface,borderBottom:`1px solid ${COLORS.borderGray}`,padding:"16px 28px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
       <div>
         <div style={{fontSize:11,fontWeight:700,color:COLORS.blue,letterSpacing:1,textTransform:"uppercase",marginBottom:2}}>{t('branding')}</div>
-        <h1 style={{margin:0,fontSize:20,fontWeight:800,color:COLORS.dark}}>{t('page_heading')}</h1>
+        <div style={{fontSize:13,fontWeight:600,color:COLORS.gray,marginBottom:1}}>{t('page_heading')}</div>
+        {clientNom && <h1 style={{margin:0,fontSize:24,fontWeight:800,color:COLORS.dark,letterSpacing:-0.3}}>{clientNom}</h1>}
       </div>
       <div style={{display:"flex",gap:8,alignItems:"center"}}>
         <Badge text={loading?`⟳ ${t('syncing')}`:`● ${t('live')}`} color={loading?COLORS.orange:COLORS.green} bg={loading?COLORS.lightOrange:COLORS.lightGreen} border={loading?COLORS.borderOrange:COLORS.borderGreen}/>

@@ -1,10 +1,9 @@
-import dotenv from 'dotenv';
+import 'dotenv/config'; // DOIT rester le premier import
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import handler from './api/data.js';
 
-dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 

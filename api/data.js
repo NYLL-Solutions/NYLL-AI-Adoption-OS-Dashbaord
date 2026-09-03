@@ -1,3 +1,8 @@
+import { getClient, getNotionDatabases } from "../notion.config.js";
+
+// Accepte un lien Notion collé tel quel ou un ID brut de 32 caractères
+const toDbId = v => (String(v || "").match(/[0-9a-f]{32}/i) || [])[0] || null;
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -8,15 +13,28 @@ export default async function handler(req, res) {
   const { source } = req.body || {};
   const TOKEN = process.env.NOTION_TOKEN;
 
-  const DB_IDS = {
-    frictions: "331a5b6b36ea810a8cc2c6fda93ed29e",
-    habits:    "331a5b6b36ea814d95fee69df77a211e",
-    aiTasks:   "331a5b6b36ea819dbf82dd8ecc931ec2",
-    values:    "331a5b6b36ea8101b861c9db4a18cd56",
-  };
+  if (!TOKEN) {
+    return res.status(500).json({
+      error: "NOTION_TOKEN absent. Local : fichier .env. Prod : Vercel > Settings > Environment Variables.",
+    });
+  }
 
-  const dbId = DB_IDS[source];
-  if (!dbId) return res.status(400).json({ error: "Unknown source" });
+  const NOTION_DATABASES = getNotionDatabases();
+  const clientName = getClient().nom;
+
+  const known = Object.keys(NOTION_DATABASES);
+  if (!known.includes(source)) {
+    return res.status(400).json({
+      error: `Source inconnue : "${source}". Sources valides : ${known.join(", ")}`,
+    });
+  }
+
+  const dbId = toDbId(NOTION_DATABASES[source]);
+  if (!dbId) {
+    return res.status(400).json({
+      error: `La base "${source}" n'est pas configuree. Definis la variable d'environnement correspondante (voir notion.config.js).`,
+    });
+  }
 
   try {
     // Fetch all pages from Notion database
@@ -38,7 +56,20 @@ export default async function handler(req, res) {
       });
 
       const data = await r.json();
-      if (!r.ok) return res.status(500).json({ error: data.message || "Notion API error" });
+      if (!r.ok) {
+        const notionCode = data.code || "";
+        let msg = data.message || "Notion API error";
+
+        if (notionCode === "object_not_found") {
+          msg = `La base "${source}" est introuvable. Cause la plus probable : elle n'est pas partagee avec l'integration Notion. Dans Notion, ouvre la base > "..." > Connexions > ajoute l'integration. Verifie ensuite le lien configure.`;
+        } else if (notionCode === "unauthorized") {
+          msg = "Token Notion invalide ou expire. Verifie NOTION_TOKEN dans Vercel > Settings > Environment Variables.";
+        } else if (notionCode === "validation_error") {
+          msg = `Le lien configure pour "${source}" ne pointe pas vers une base de donnees Notion valide (c'est peut-etre une page, ou une vue liee).`;
+        }
+
+        return res.status(r.status === 401 ? 500 : 400).json({ error: msg, notionCode });
+      }
 
       results = results.concat(data.results || []);
       cursor = data.has_more ? data.next_cursor : undefined;
@@ -54,7 +85,7 @@ export default async function handler(req, res) {
       return flat;
     });
 
-    res.status(200).json({ data: normalized });
+    res.status(200).json({ data: normalized, clientName });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
